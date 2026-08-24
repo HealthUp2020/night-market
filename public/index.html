@@ -49,9 +49,9 @@
     <!-- ================= LEFT PRICE WALL ================= -->
     <div class="glass wall"><div class="sheen"></div>
       <div class="wh"><span class="ttl">Market Prices</span>
-        <button class="info" id="wall-info" aria-label="How market prices work" tabindex="0">?<span class="tip" role="tooltip"><b>Prices fall as goods sell.</b>The top token is the current CR payout. Each sale takes the highest tokens, so a good pays less as its stock (×N) runs down — sell scarce goods first for the premium.</span></button>
+        <button class="info" id="wall-info" aria-label="How market prices work" tabindex="0">?<span class="tip" role="tooltip"><b>Prices fall as goods sell.</b>The top token is the current Gold payout. Each sale takes the highest tokens, so a good pays less as its stock (×N) runs down — sell scarce goods first for the premium.</span></button>
         <span class="rule"></span></div>
-      <div class="wsub">TOP TOKEN = CR PAYOUT · ×N = STOCK LEFT</div>
+      <div class="wsub">TOP TOKEN = GOLD PAYOUT · ×N = STOCK LEFT</div>
       <div class="rows" id="price-rows"></div>
       <div class="wfoot">
         <div class="fh">Bonus Tokens // Fixer Seal</div>
@@ -108,16 +108,18 @@
     <div class="op">
       <div class="opbg"></div>
 
+      <!-- Operator portrait (bottom-left), filled by mountOperatorPortrait() -->
+      <div class="op-portrait" id="op-portrait" aria-hidden="true"></div>
+
       <div class="fleet">
         <div class="k"><span class="lab" style="font-size:9px">Drone Fleet</span><span class="cnt" id="fleet-count">0</span></div>
         <div class="cluster" id="fleet-cluster"></div>
       </div>
 
       <div class="glass ophud"><div class="sheen"></div>
-        <div class="av" id="op-av"></div>
         <div class="ohinfo">
-          <div class="nm">Operator // You</div>
-          <div class="score"><b id="op-score">0</b><span class="u">CR</span></div>
+          <div class="nm">Operator // You <span class="oprank" id="op-rank"></span></div>
+          <div class="score"><b id="op-score">0</b><span class="u">Gold</span></div>
           <div class="mini"><div class="st"><span class="k">HAND</span><span class="v" id="op-hand">0</span></div><div class="st"><span class="k">FLEET</span><span class="v" id="op-fleet">0</span></div><div class="st"><span class="k">DECK</span><span class="v" id="op-deck">0</span></div></div>
         </div>
       </div>
@@ -190,13 +192,13 @@
       <button id="howto-close" class="hclose" aria-label="Close">✕</button>
     </div>
 
-    <div class="hgoal"><b>Goal —</b> win 2 of 3 rounds. Each round, bank the most CR by selling contraband before the market collapses.</div>
+    <div class="hgoal"><b>Goal —</b> win 2 of 3 rounds. Each round, bank the most Gold by selling contraband before the market collapses.</div>
 
     <div class="hsectitle">On your turn — do one thing</div>
     <div class="hgrid">
       <div class="hcard"><b>Take 1 card</b><p>Draw one good from the market into your hand (max 7).</p></div>
       <div class="hcard"><b>Take drones</b><p>Sweep every drone from the market into your fleet — they don't clog your hand.</p></div>
-      <div class="hcard"><b>Sell goods</b><p>Cash in cards of one good for CR. Rare goods must be sold 2+ at a time.</p></div>
+      <div class="hcard"><b>Sell goods</b><p>Cash in cards of one good for Gold. Rare goods must be sold 2+ at a time.</p></div>
       <div class="hcard"><b>Exchange</b><p>Give 2+ drones from your fleet to take the same number of market cards at once.</p></div>
     </div>
 
@@ -204,8 +206,8 @@
     <ul class="hlist">
       <li><b>Prices fall as goods sell.</b> Each good's tokens stack high-to-low; every sale pays the top tokens. Sell scarce goods first for the premium.</li>
       <li><b>Sell in bulk for a bonus.</b> Selling 3, 4, or 5+ of a good grants an extra bonus token on top.</li>
-      <li><b>Drones earn Fixer Reputation.</b> Whoever holds the largest drone fleet at round's end takes a <b>+5 CR</b> bonus.</li>
-      <li><b>Round ends</b> when 3 goods sell out (watch the <b>SUPPLY</b> meter) or the deck runs dry. Most CR wins the round and a seal — first to <b>2 seals</b> wins the match.</li>
+      <li><b>Drones earn Fixer Reputation.</b> Whoever holds the largest drone fleet at round's end takes a <b>+5 Gold</b> bonus.</li>
+      <li><b>Round ends</b> when 3 goods sell out (watch the <b>SUPPLY</b> meter) or the deck runs dry. Most Gold wins the round and a seal — first to <b>2 seals</b> wins the match.</li>
     </ul>
 
     <button id="howto-tour" class="htour" type="button">▶ Start the walkthrough</button>

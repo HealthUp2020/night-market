@@ -43,7 +43,7 @@ export const SEALS_TO_WIN = 2;   // first operator to 2 round-wins takes the mat
 function setupRound(state, startSeat) {
   state.deck = buildDeck();
   state.market = [];
-  for (const p of state.players) { p.hand = []; p.camels = 0; p.score = 0; }
+  for (const p of state.players) { p.hand = []; p.camels = 0; p.score = 0; p.lastAction = null; }
   state.tokens = JSON.parse(JSON.stringify(TOKEN_TEMPLATE));
   state.bonus = { 3: shuffle(BONUS_TEMPLATE[3]), 4: shuffle(BONUS_TEMPLATE[4]), 5: shuffle(BONUS_TEMPLATE[5]) };
   state.turnIndex = startSeat;
@@ -57,7 +57,7 @@ function setupRound(state, startSeat) {
 export function newGame() {
   const state = {
     deck: [], market: [],
-    players: PLAYER_NAMES.map((name, i) => ({ id: i, name, isHuman: i === 0, hand: [], camels: 0, score: 0 })),
+    players: PLAYER_NAMES.map((name, i) => ({ id: i, name, isHuman: i === 0, hand: [], camels: 0, score: 0, lastAction: null })),
     tokens: {}, bonus: {},
     turnIndex: 0, round: 1, gameOver: false, log: [],
     // Best-of-3 match wrapper. `seals[i]` = rounds won by seat i; `cumScore` = tiebreak.
@@ -89,6 +89,18 @@ function topScorers(state) {
   const scores = state.players.map((p) => p.score);
   const max = Math.max(...scores);
   return scores.map((s, i) => (s === max ? i : -1)).filter((i) => i >= 0);
+}
+// Live match standings (ROC-236): rank every operator by seals, then current-round CR.
+// Returns [{ id, rank, isLeader }] in seat order. `rank` shares on ties (1 + strictly-ahead
+// count). `isLeader` marks rank-1 seats, but is suppressed while everyone is tied for first
+// (e.g. the start of the match) so no false leader is shown before anyone pulls ahead.
+export function standings(state) {
+  const m = state.match;
+  const rows = state.players.map((p, i) => ({ id: i, seals: m ? m.seals[i] : 0, score: p.score }));
+  const ahead = (o, r) => o.seals > r.seals || (o.seals === r.seals && o.score > r.score);
+  const ranks = rows.map((r) => ({ id: r.id, rank: 1 + rows.filter((o) => ahead(o, r)).length }));
+  const firsts = ranks.filter((x) => x.rank === 1).length;
+  return ranks.map((x) => ({ id: x.id, rank: x.rank, isLeader: x.rank === 1 && firsts < rows.length }));
 }
 export function dealGoodsHand(state, playerIdx) {
   const p = state.players[playerIdx];
@@ -146,6 +158,7 @@ export function takeCard(state, playerIdx, marketIdx) {
   const p = state.players[playerIdx];
   if (p.hand.length >= HAND_LIMIT) return { ok: false, error: `Hand is full (max ${HAND_LIMIT}).` };
   state.market.splice(marketIdx, 1); p.hand.push(card); refillMarket(state, 1);
+  p.lastAction = { kind: "take", good: card };
   addLog(state, `${p.name} took 1× ${GOODS_EN[card]} from market.`);
   endTurn(state, playerIdx); return { ok: true };
 }
@@ -154,6 +167,7 @@ export function takeCamels(state, playerIdx) {
   if (idxs.length === 0) return { ok: false, error: "No drones on the market." };
   const n = idxs.length, p = state.players[playerIdx];
   state.market = state.market.filter((c) => c !== "camel"); p.camels += n; refillMarket(state, n);
+  p.lastAction = { kind: "drones", count: n };
   addLog(state, `${p.name} swept ${n} drone${n > 1 ? "s" : ""} into the fleet.`);
   endTurn(state, playerIdx); return { ok: true };
 }
@@ -168,8 +182,9 @@ export function sellCards(state, playerIdx, good, count) {
   const taken = state.tokens[good].splice(0, count);
   state.lastSale = { playerIdx, good, values: taken.slice() }; // for the price-wall spend animation
   const sum = taken.reduce((a, b) => a + b, 0); p.score += sum;
-  let bonus = "";
-  if (count >= 3) { const key = count >= 5 ? 5 : count; const bp = state.bonus[key]; if (bp.length) { const b = bp.shift(); p.score += b; bonus = ` +${b}cr bonus`; } }
+  let bonus = "", bonusVal = 0;
+  if (count >= 3) { const key = count >= 5 ? 5 : count; const bp = state.bonus[key]; if (bp.length) { const b = bp.shift(); p.score += b; bonusVal = b; bonus = ` +${b}cr bonus`; } }
+  p.lastAction = { kind: "sell", good, count, gain: sum + bonusVal };
   addLog(state, `${p.name} sold ${count}× ${GOODS_EN[good]} +${sum}cr${bonus}.`);
   endTurn(state, playerIdx); return { ok: true };
 }
@@ -189,6 +204,7 @@ export function exchangeCards(state, playerIdx, giveSpec, marketIdxs) {
   p.camels -= giveSpec.camels;
   for (let i = 0; i < giveSpec.camels; i++) given.push("camel");
   state.market.push(...given); p.hand.push(...taken);
+  p.lastAction = { kind: "exchange", count: taken.length };
   addLog(state, `${p.name} exchanged ${given.length} for ${taken.map((c) => GOODS_EN[c]).join(", ")}.`);
   endTurn(state, playerIdx); return { ok: true };
 }

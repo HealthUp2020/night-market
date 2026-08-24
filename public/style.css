@@ -425,7 +425,7 @@ a:hover { color: var(--rare-cyan); text-shadow: var(--glow-text-ui); }
   .ophud .mini .k{font:600 7px/1 var(--font-display);letter-spacing:.14em;color:var(--text-muted)}
   .ophud .mini .v{font:600 15px/1 var(--font-mono);color:var(--text-primary)}
 
-  .fleet{position:absolute;left:20px;bottom:150px;z-index:19;width:216px}
+  .fleet{position:absolute;left:880px;bottom:40px;z-index:19;width:250px}
   .fleet .k{margin-bottom:6px;display:flex;align-items:center;gap:6px}
   .fleet .cluster{display:flex;flex-wrap:wrap;gap:5px;max-width:216px}
   .drone{width:26px;height:24px;color:var(--accent-ui);opacity:.9}
@@ -740,3 +740,51 @@ body{background:var(--bg-page)}
   color:var(--accent-ui);font:600 11px/1 var(--font-display);letter-spacing:.12em;text-transform:uppercase;padding:11px 20px}
 #howto .htour:hover{color:var(--rare-cyan);border-color:rgba(0,229,255,.5)}
 @media (prefers-reduced-motion: reduce){ .wt-hole{transition:none} }
+
+/* ---- Bot progression: last-action readout + live standings (ROC-235/236) ---- */
+.rival .rrank{position:absolute;top:5px;left:6px;z-index:3;min-width:17px;height:16px;padding:0 4px;box-sizing:border-box;
+  display:inline-flex;align-items:center;justify-content:center;border-radius:5px;
+  font:700 9px/1 var(--font-mono);letter-spacing:.02em;color:var(--text-muted);
+  background:rgba(8,13,20,.88);border:1px solid var(--border-panel)}
+.rival .rrank.lead{color:#100a02;background:var(--rare-gold);border-color:var(--rare-gold);box-shadow:0 0 12px rgba(255,201,77,.55)}
+.rival .rlast{margin-top:7px;font:600 8px/1.2 var(--font-mono);letter-spacing:.06em;color:var(--text-muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rival.active .rlast,.rival .rlast.on{color:var(--accent-ui)}
+.ophud .oprank{font:700 9px/1 var(--font-mono);letter-spacing:.04em;color:var(--text-muted);margin-left:7px;
+  padding:3px 6px;border-radius:5px;border:1px solid var(--border-panel);background:rgba(8,13,20,.6);vertical-align:middle}
+.ophud .oprank.lead{color:#100a02;background:var(--rare-gold);border-color:var(--rare-gold);box-shadow:0 0 12px rgba(255,201,77,.5)}
+
+/* ---- Price-wall scarcity states (ROC-241) — replaces the proportional gauge ---- */
+.wall .r2{justify-content:space-between}
+.wall .scz{flex:1;min-width:0;font:700 7.5px/1 var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap}
+.wall .row.low .scz{color:var(--warn)}
+.wall .row.empty .scz{color:var(--text-muted)}
+.wall .cnt .lab{color:var(--text-muted);font-size:7px;letter-spacing:.08em;margin-left:2px;text-transform:uppercase}
+.wall .row.low .cnt .lab{color:var(--warn)}
+
+/* ---- Round-end telegraph: pulse the Supply meter at 2/3 (ROC-243) ---- */
+#progress .psupply.warn{animation:supplyPulse 1.25s ease-in-out infinite}
+@keyframes supplyPulse{0%,100%{opacity:1}50%{opacity:.5}}
+@media (prefers-reduced-motion: reduce){ #progress .psupply.warn{animation:none} }
+
+/* ---- Rival card: SCORE promoted to headline (ROC-242) ---- */
+.rival .rscore{display:flex;align-items:baseline;gap:5px;margin-top:3px}
+.rival .rscore>b{font:600 21px/1 var(--font-mono);color:var(--accent-ui);letter-spacing:.01em}
+.rival .rscore>.u{font:600 8px/1 var(--font-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)}
+.rival .rscore .rmini{margin-left:auto;display:flex;gap:11px;align-self:center;
+  font:600 8px/1 var(--font-mono);letter-spacing:.08em;color:var(--text-muted);white-space:nowrap}
+.rival.active .rscore>b{text-shadow:var(--glow-text-ui)}
+
+/* ---- Absolute stock bar (ROC-244): one fixed-width cell per token, shared scale ---- */
+.wall .bar{display:flex;gap:1px;align-items:center;flex-wrap:nowrap;min-width:0}
+.wall .bar i{box-sizing:border-box;width:5px;height:8px;flex:none;background:color-mix(in srgb,var(--ac) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--ac) 18%,transparent);clip-path:polygon(2px 0,100% 0,calc(100% - 2px) 100%,0 100%);
+  transition:background 200ms var(--ease-hud),border-color 200ms var(--ease-hud)}
+.wall .bar i.lit{background:color-mix(in srgb,var(--ac) 76%,transparent);border-color:color-mix(in srgb,var(--ac) 50%,transparent)}
+.wall .row.low .bar i.lit{background:color-mix(in srgb,var(--warn) 82%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
+
+/* ---- Operator portrait (character art, bottom-left of the operator zone) ---- */
+.op .op-portrait{position:absolute;left:6px;bottom:0;height:256px;z-index:1;pointer-events:none;
+  display:flex;align-items:flex-end;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35))}
+.op .op-portrait .op-portrait-img{height:100%;width:auto;display:block}
+.op .ophud{z-index:3} /* HUD panel reads above the portrait */

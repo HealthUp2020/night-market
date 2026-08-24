@@ -2,7 +2,7 @@
 import { CARD_ART } from "./card-art.js"; // illustration SVGs extracted from ui-mockups/Assets/
 import {
   GOODS, GOODS_EN, RARE, TOKEN_TEMPLATE, PLAYER_COUNT, SEALS_TO_WIN, HAND_LIMIT,
-  PILES_TO_END, emptyPileCount,
+  PILES_TO_END, emptyPileCount, standings,
   newGame, nextRound, takeCard, takeCamels, sellCards, exchangeCards, botPlay,
 } from "./engine.js";
 import { fitScale, isTooSmall } from "./layout.js";
@@ -10,6 +10,8 @@ import { DIFFICULTY, DIFFICULTY_ORDER } from "./strategies.js";
 import { SAVE_KEY, parseSave } from "./persistence.js";
 import { AVATARS } from "./avatars.js";
 import { startWalkthrough } from "./walkthrough.js";
+import { mountOperatorPortrait } from "./portrait.js";
+import operatorUrl from "./operator.jpg";
 // Live opponent difficulty (ROC-208): easy=reckless, normal=heuristic, hard=1-ply lookahead.
 let difficulty = "hard";
 
@@ -40,14 +42,33 @@ function cardHTML(good, { selected, playable, zone, idx }) {
   </div>`;
 }
 
-function rivalHTML(p) {
+// Compact readout of a player's most recent move (ROC-235). Reads the engine's structured
+// p.lastAction — the same event it logs — so the card and the system feed never disagree.
+function actionLabel(p) {
+  const a = p.lastAction;
+  if (!a) return "waiting…";
+  switch (a.kind) {
+    case "take": return `TOOK ${GOODS_EN[a.good].toUpperCase()}`;
+    case "drones": return `SWEPT ×${a.count} DRONE${a.count > 1 ? "S" : ""}`;
+    case "sell": return `SOLD ×${a.count} · +${a.gain}`;
+    case "exchange": return `SWAPPED ×${a.count}`;
+    default: return "waiting…";
+  }
+}
+function rankBadgeHTML(info) {
+  if (!info) return "";
+  return `<span class="rrank${info.isLeader ? " lead" : ""}">${info.isLeader ? "★" : "#" + info.rank}</span>`;
+}
+function rivalHTML(p, rankInfo) {
   const active = state.turnIndex === p.id && !state.gameOver;
   return `<div class="glass rival ${active ? "active" : ""}"><div class="sheen"></div>
     <div class="lock">${LOCK_SVG}</div>
+    ${rankBadgeHTML(rankInfo)}
     <div class="av">${AVATARS[p.name] || AV_SVG}</div>
     <div class="rinfo">
       <div class="top"><span class="nm">${p.name}</span><span class="stt"><i></i><b>${active ? "EXEC" : "IDLE"}</b></span></div>
-      <div class="stats"><div class="st"><span class="k">HAND</span><span class="v">${p.hand.length}</span></div><div class="st"><span class="k">FLEET</span><span class="v">${p.camels}</span></div><div class="st"><span class="k">SCORE</span><span class="v">${p.score}</span></div></div>
+      <div class="rscore"><b>${p.score}</b><span class="u">Gold</span><span class="rmini"><span>HAND ${p.hand.length}</span><span>FLEET ${p.camels}</span></span></div>
+      <div class="rlast${active ? " on" : ""}">${actionLabel(p)}</div>
     </div>
   </div>`;
 }
@@ -59,7 +80,6 @@ function rivalHTML(p) {
 // ============================================================
 const PRICE_CLASS = { diamond: "g-cyan", gold: "g-gold", silver: "g-mag", cloth: "g-pur", spice: "g-grn", leather: "g-org" };
 const ACCENT_HEX = { diamond: "#00e5ff", gold: "#ffc94d", silver: "#ff2d96", cloth: "#8578ad", spice: "#6fa07d", leather: "#b97a4b" };
-const GAUGE_SEGS = 7;
 const EASE = "cubic-bezier(.2,.9,.25,1)";
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const TRACE = '<svg class="tr" viewBox="0 0 42 30" preserveAspectRatio="none"><g stroke="currentColor" fill="none" stroke-width="1" stroke-opacity=".38"><path d="M4 9H14V6M14 9H24"/><path d="M4 21H12V24M12 21H22"/><path d="M38 13H28V19"/></g><g fill="currentColor" fill-opacity=".5"><rect x="13" y="5" width="2" height="2"/><rect x="23" y="8" width="2" height="2"/><rect x="11" y="23" width="2" height="2"/></g></svg>';
@@ -78,14 +98,16 @@ function initPriceWall() {
     row.innerHTML = `
       <div class="pile"><div class="sl" style="bottom:3px"></div><div class="sl" style="bottom:7px"></div><div class="chip">${chipInner(top)}</div></div>
       <div class="mid">
-        <div class="r1"><span class="nm">${GOODS_EN[good]}</span><span class="val"><b>${top}</b><span>CR</span></span></div>
-        <div class="r2"><div class="gauge"></div><span class="cnt"><span class="x">×</span><span class="n">${count}</span></span></div>
+        <div class="r1"><span class="nm">${GOODS_EN[good]}</span><span class="val"><b>${top}</b><span>Gold</span></span></div>
+        <div class="r2"><div class="bar"></div><span class="cnt"><span class="x">×</span><span class="n">${count}</span><span class="lab">left</span></span></div>
       </div>`;
-    const gauge = row.querySelector(".gauge");
-    for (let i = 0; i < GAUGE_SEGS; i++) gauge.appendChild(document.createElement("i"));
+    // Absolute stock bar (ROC-244): one cell per token, sized to this good's starting pile,
+    // so a full pile reads full and equal counts look equal across goods.
+    const bar = row.querySelector(".bar"), startMax = TOKEN_TEMPLATE[good].length;
+    for (let i = 0; i < startMax; i++) bar.appendChild(document.createElement("i"));
     host.appendChild(row);
     PW[good] = { row, chip: row.querySelector(".chip"), pile: row.querySelector(".pile"),
-      gauge, valEl: row.querySelector(".val b"), cntEl: row.querySelector(".cnt .n"), shown: count };
+      barEl: bar, valEl: row.querySelector(".val b"), cntEl: row.querySelector(".cnt .n"), shown: count };
     setRowState(good);
     // pile-up entrance
     if (!REDUCED) {
@@ -98,24 +120,32 @@ function initPriceWall() {
 }
 
 // set a row's chip/value/gauge/count/state instantly from current game state
+// Stock readout (ROC-244/241): show exactly one cell per remaining token — no empty capacity
+// cells — so the number of visible cells IS the token count. LOW (≤2) / SOLD OUT (0) via colour.
+function scarcity(s, count) {
+  [...s.barEl.children].forEach((cell, i) => {
+    const on = i < count;
+    cell.classList.toggle("lit", on);
+    cell.style.display = on ? "" : "none";
+  });
+  s.row.classList.toggle("low", count > 0 && count <= 2);
+  s.row.classList.toggle("empty", count === 0);
+}
 function setRowState(good) {
-  const s = PW[good], count = state.tokens[good].length, startMax = TOKEN_TEMPLATE[good].length;
+  const s = PW[good], count = state.tokens[good].length;
   const top = count ? state.tokens[good][0] : "—";
   const slv = Math.min(count - 1, 2);
   s.pile.querySelectorAll(".sl").forEach((x, i) => x.style.display = i < slv ? "block" : "none");
   s.chip.innerHTML = count ? chipInner(top) : "<b>—</b>";
   s.valEl.textContent = top;
   s.cntEl.textContent = count;
-  const lit = count === 0 ? 0 : Math.max(1, Math.round((count / startMax) * GAUGE_SEGS));
-  [...s.gauge.children].forEach((seg, i) => seg.classList.toggle("lit", i < lit));
-  s.row.classList.toggle("low", count > 0 && count <= 2);
-  s.row.classList.toggle("empty", count === 0);
+  scarcity(s, count);
   s.shown = count;
 }
 
-// roll ×N count and animate gauge to the new level (used during a spend)
+// roll ×N count down (used during a spend), then refresh the scarcity state
 function rollRow(good) {
-  const s = PW[good], count = state.tokens[good].length, startMax = TOKEN_TEMPLATE[good].length;
+  const s = PW[good], count = state.tokens[good].length;
   s.valEl.textContent = count ? state.tokens[good][0] : "—";
   const from = +s.cntEl.textContent, t0 = performance.now();
   (function step(now) {
@@ -123,10 +153,7 @@ function rollRow(good) {
     s.cntEl.textContent = Math.round(from + (count - from) * k);
     if (k < 1) requestAnimationFrame(step);
   })(performance.now());
-  const lit = count === 0 ? 0 : Math.max(1, Math.round((count / startMax) * GAUGE_SEGS));
-  [...s.gauge.children].forEach((seg, i) => seg.classList.toggle("lit", i < lit));
-  s.row.classList.toggle("low", count > 0 && count <= 2);
-  s.row.classList.toggle("empty", count === 0);
+  scarcity(s, count);
 }
 
 function crCount(to, dur = 380) {
@@ -141,7 +168,7 @@ function crCount(to, dur = 380) {
 function creditPop(v) {
   const r = document.getElementById("op-score").getBoundingClientRect();
   const c = document.createElement("div");
-  c.className = "credit-pop"; c.textContent = "+" + v + " CR";
+  c.className = "credit-pop"; c.textContent = "+" + v + " Gold";
   c.style.left = (r.right + 6) + "px"; c.style.top = (r.top - 4) + "px";
   document.getElementById("fx").appendChild(c);
   c.addEventListener("animationend", () => c.remove(), { once: true });
@@ -217,11 +244,14 @@ function render() {
   document.getElementById("round-sub").textContent = "RND " + String(state.round).padStart(2, "0");
 
   const banner = document.getElementById("turn-banner"), tb = document.getElementById("turn-text");
-  if (state.gameOver) { tb.textContent = "Match // Over"; banner.className = "banner state-over"; }
+  if (state.gameOver) { tb.textContent = (state.match && state.match.matchOver) ? "Match // Over" : "Round // Complete"; banner.className = "banner state-over"; }
   else if (playable) { tb.textContent = "Operator // Your Move"; banner.className = "banner state-you"; }
   else { tb.textContent = `${state.players[state.turnIndex].name} // Executing`; banner.className = "banner state-bot"; }
 
-  document.getElementById("rivals").innerHTML = state.players.slice(1).map(rivalHTML).join("");
+  const stand = standings(state); // ROC-236 live standings, keyed by seat id
+  // Suppress rank chips until someone pulls ahead — otherwise everyone reads "#1" at the start.
+  const rankById = stand.some((s) => s.isLeader) ? Object.fromEntries(stand.map((s) => [s.id, s])) : {};
+  document.getElementById("rivals").innerHTML = state.players.slice(1).map((p) => rivalHTML(p, rankById[p.id])).join("");
 
   document.getElementById("market-cards").innerHTML = state.market
     .map((c, i) => cardHTML(c, { selected: selectedMarket.has(i), playable, zone: "market", idx: i })).join("");
@@ -238,6 +268,10 @@ function render() {
   document.getElementById("op-hand").textContent = human.hand.length;
   document.getElementById("op-fleet").textContent = human.camels;
   document.getElementById("op-deck").textContent = state.deck.length;
+  const opRank = rankById[0]; // the Operator's own standing
+  const opRankEl = document.getElementById("op-rank");
+  opRankEl.textContent = opRank ? (opRank.isLeader ? "★" : "#" + opRank.rank) : "";
+  opRankEl.classList.toggle("lead", !!(opRank && opRank.isLeader));
 
   const nH = human.hand.length;
   document.getElementById("hand").innerHTML = `<div class="lab2 cap mono">YOUR HAND // ${nH}</div>` +
@@ -320,7 +354,7 @@ function updateEndScreen() {
     <div class="eop${ringed.has(i) ? " win" : ""}">
       <div class="nm">${p.name}</div>
       <div class="dm">${sealDots(m ? m.seals[i] : 0)}</div>
-      <div class="cr">${cr(i)} CR</div>
+      <div class="cr">${cr(i)} Gold</div>
     </div>`).join("");
 
   const rows = state.players.map((p, i) => ({ i, name: p.name, seals: m ? m.seals[i] : 0, score: cr(i) }));
@@ -335,7 +369,7 @@ function updateEndScreen() {
       <div class="ewho">${who}</div>
       <div class="esub">${sub}</div>
       <div class="eseals">${ops}</div>
-      <table class="etable"><tr><th>#</th><th>OPERATOR</th><th>SEALS</th><th class="r">${matchOver ? "TOTAL CR" : "ROUND CR"}</th></tr>${table}</table>
+      <table class="etable"><tr><th>#</th><th>OPERATOR</th><th>SEALS</th><th class="r">${matchOver ? "TOTAL GOLD" : "ROUND GOLD"}</th></tr>${table}</table>
       ${buttons}
     </div>`;
   el.classList.add("on");
@@ -580,10 +614,10 @@ function setOnboarded() { try { localStorage.setItem(ONBOARD_KEY, "1"); } catch 
 const WT_STEPS = [
   { target: null, title: "Welcome to Night Market", body: "You're the OPERATOR, cornering contraband against three rival machines. Here's the board — take the quick tour, or skip anytime." },
   { target: ".market", title: "The Night Market", body: "Seven goods sit face-up here. On your turn you take one card, sweep the drones, or spend drones from your fleet to grab several cards at once." },
-  { target: ".wall", title: "Market prices", body: "Prices fall as goods sell — the top token is the current CR payout. Sell scarce goods first for the premium." },
+  { target: ".wall", title: "Market prices", body: "Prices fall as goods sell — the top token is the current Gold payout. Sell scarce goods first for the premium." },
   { target: "#hand", title: "Your hand", body: "Cards you've taken, up to 7. Collect matching goods, then sell a batch — selling 3 or more earns a bonus token." },
   { target: ".dock", title: "Your actions", body: "Select cards and this button reads your intent: Take, Sell, or Exchange. It greys out and tells you why when a move isn't legal." },
-  { target: ".fleet", title: "Your drone fleet", body: "Drones don't clog your hand and pay for exchanges. Hold the largest fleet at round's end for a +5 CR Fixer bonus." },
+  { target: ".fleet", title: "Your drone fleet", body: "Drones don't clog your hand and pay for exchanges. Hold the largest fleet at round's end for a +5 Gold Fixer bonus." },
   { target: ".rivals", title: "The rival machines", body: "Three AI operators act between your turns. Watch what they hoard — and deny them the goods they need." },
   { target: "#progress", title: "Match progress", body: "Best of three rounds. Track rounds, seals, market supply and the deck here — first to 2 seals wins the match." },
   { target: "#util-help", title: "Need a refresher?", body: "Open this ? anytime to reread the rules or replay this walkthrough. That's the tour — good luck, Operator." },
@@ -640,5 +674,5 @@ initPriceWall();
 initBackgroundSwitch();
 initMenu();
 render();
-const _opAv = document.getElementById("op-av"); // operator is always players[0]
-if (_opAv) _opAv.innerHTML = AVATARS["OPERATOR"] || AV_SVG;
+const _opPortrait = document.getElementById("op-portrait"); // the Operator (players[0]) presence
+if (_opPortrait) mountOperatorPortrait(_opPortrait, operatorUrl);
