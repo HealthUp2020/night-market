@@ -785,6 +785,6 @@ body{background:var(--bg-page)}
 
 /* ---- Operator portrait (character art, bottom-left of the operator zone) ---- */
 .op .op-portrait{position:absolute;left:6px;bottom:0;height:256px;z-index:1;pointer-events:none;
-  display:flex;align-items:flex-end;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35))}
+  display:flex;align-items:flex-end}
 .op .op-portrait .op-portrait-img{height:100%;width:auto;display:block}
 .op .ophud{z-index:3} /* HUD panel reads above the portrait */

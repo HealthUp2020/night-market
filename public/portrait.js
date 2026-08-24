@@ -31,9 +31,24 @@ export function mountOperatorPortrait(container, url) {
       const brightF = clamp01((lum - 500) / 120);   // 1 when very bright, 0 by lum≈500
       alpha[j] = Math.round(p[i + 3] * (1 - neutralF * brightF));
     }
-    // Pass 2 — defringe: erode the matte by 1px (3×3 min) to cut the anti-alias halo where
-    // the outline blended with the grey background, otherwise it reads as a dark rim.
-    const ER = 1;
+    // Pass 1b — only remove background CONNECTED to the frame edge. Flood-fill the exterior
+    // through keyed (transparent) pixels from the borders; any keyed pixel not reached is an
+    // interior hole (e.g. a light hair highlight caught by the key) → refill it opaque.
+    const exterior = new Uint8Array(n), stack = new Int32Array(n);
+    let sp = 0;
+    const seed = (j) => { if (alpha[j] < 128 && !exterior[j]) { exterior[j] = 1; stack[sp++] = j; } };
+    for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
+    while (sp > 0) {
+      const j = stack[--sp], x = j % w, y = (j / w) | 0;
+      if (x > 0) seed(j - 1); if (x < w - 1) seed(j + 1);
+      if (y > 0) seed(j - w); if (y < h - 1) seed(j + w);
+    }
+    for (let j = 0; j < n; j++) if (alpha[j] < 128 && !exterior[j]) alpha[j] = 255; // fill hole
+    // Pass 2 — defringe: erode the matte (min filter) to cut the anti-alias rim where the dark
+    // coat blended with the grey background — that blended edge is opaque and dark, so only
+    // erosion removes it. 2px clears the gradient without eating the fingers.
+    const ER = 2;
     const colHits = new Uint16Array(w), rowHits = new Uint16Array(h);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {

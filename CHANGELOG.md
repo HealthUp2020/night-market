@@ -7,6 +7,14 @@ releases (0.x) may still change gameplay and UI between minor versions.
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-08-24
+
+### Fixed
+- Operator portrait: removed a dark smear in the hair — the background key was punching
+  a hole through light blonde highlights and the dark UI showed through. The key now only
+  removes background **connected to the frame edge** (flood-fill) and refills interior holes,
+  and the silhouette is defringed (2px erode) with the drop-shadow dropped, so no dark rim.
+
 ## [0.1.0] — 2026-08-24
 
 First tagged release. A playable, best-of-3, 4-player cyberpunk trading-card game
@@ -42,5 +50,6 @@ First tagged release. A playable, best-of-3, 4-player cyberpunk trading-card gam
 - Price-wall stock display no longer misleads (was normalized per-good; now absolute).
 - Drone-for-cards exchange and single-drone selection corrected.
 
-[Unreleased]: https://github.com/HealthUp2020/night-market/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/HealthUp2020/night-market/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/HealthUp2020/night-market/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/HealthUp2020/night-market/releases/tag/v0.1.0

@@ -1,6 +1,6 @@
 {
   "name": "night-market",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "module": "server.ts",
   "type": "module",
   "private": true,
