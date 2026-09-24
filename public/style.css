@@ -788,3 +788,15 @@ body{background:var(--bg-page)}
   display:flex;align-items:flex-end}
 .op .op-portrait .op-portrait-img{height:100%;width:auto;display:block}
 .op .ophud{z-index:3} /* HUD panel reads above the portrait */
+
+/* ---- Interactive demo banner (ROC-191 onboarding) ---- */
+#demobar{position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:440;display:none;align-items:center;gap:12px;
+  background:rgba(14,20,28,.96);border:1px solid var(--rare-cyan);border-top:none;border-radius:0 0 12px 12px;padding:9px 16px;
+  box-shadow:0 6px 24px rgba(0,0,0,.5);font-family:var(--font-display)}
+#demobar.on{display:flex}
+#demobar .dm-dot{width:8px;height:8px;border-radius:50%;background:var(--rare-cyan);box-shadow:0 0 8px var(--rare-cyan);animation:ds-pulse 1.6s infinite}
+#demobar>b{font:700 12px/1 var(--font-display);letter-spacing:.18em;color:var(--rare-cyan)}
+#demobar .dm-sub{font:400 11px/1 var(--font-body);color:var(--text-secondary)}
+#demobar #demo-exit{margin-left:6px;cursor:pointer;border:1px solid var(--rare-cyan);background:transparent;color:var(--rare-cyan);
+  font:700 10px/1 var(--font-display);letter-spacing:.1em;padding:7px 12px;border-radius:7px}
+#demobar #demo-exit:hover{background:var(--rare-cyan);color:#04121a}

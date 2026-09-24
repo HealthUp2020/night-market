@@ -26,6 +26,7 @@ const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 let state = newGame();
 let selectedMarket = new Set();
 let selectedHand = new Set();
+let demoMode = false, demoTimer = null; // interactive demo: all four seats auto-play (ROC-191)
 
 // ---- HTML builders ----
 function cardHTML(good, { selected, playable, zone, idx }) {
@@ -326,7 +327,7 @@ const sealDots = (n) => {
 function updateEndScreen() {
   const el = document.getElementById("endscreen");
   if (!el) return;
-  if (!state.gameOver) { el.classList.remove("on"); el.setAttribute("aria-hidden", "true"); return; }
+  if (demoMode || !state.gameOver) { el.classList.remove("on"); el.setAttribute("aria-hidden", "true"); return; }
   const m = state.match, matchOver = !!(m && m.matchOver);
   const winners = matchOver ? (m.matchWinners || []) : (m && m.lastRound ? m.lastRound.winners : []);
   const ringed = new Set(winners);
@@ -438,6 +439,7 @@ function showError(msg) { const h = document.getElementById("dock-hint"); h.text
 
 // ---- Interaction ----
 function onCardClick(e) {
+  if (demoMode) return; // board is auto-playing
   const el = e.target.closest(".card");
   if (!el || state.gameOver || !state.players[state.turnIndex].isHuman) return;
   const set = el.dataset.zone === "market" ? selectedMarket : selectedHand;
@@ -449,6 +451,7 @@ document.getElementById("market-cards").addEventListener("click", onCardClick);
 document.getElementById("hand").addEventListener("click", onCardClick);
 
 function requirePlayerTurn() {
+  if (demoMode) return false; // ignore dock actions while the demo auto-plays
   if (state.gameOver) { showError("Match over — reset to play again."); return false; }
   if (!state.players[state.turnIndex].isHuman) { showError("Wait for your turn."); return false; }
   return true;
@@ -464,7 +467,7 @@ document.getElementById("btn-primary").addEventListener("click", () => {
   else if (a.kind === "exchange") afterPlayerAction(exchangeCards(state, 0, { handIdxs: [], camels: a.need }, [...selectedMarket]));
 });
 document.getElementById("btn-clear").addEventListener("click", () => { selectedMarket = new Set(); selectedHand = new Set(); render(); });
-document.getElementById("btn-reset").addEventListener("click", () => { state = newGame(); selectedMarket = new Set(); selectedHand = new Set(); initPriceWall(); render(); });
+document.getElementById("btn-reset").addEventListener("click", () => { if (demoMode) return; state = newGame(); selectedMarket = new Set(); selectedHand = new Set(); initPriceWall(); render(); });
 
 // End-screen buttons: continue to the next round, or start a fresh match.
 document.getElementById("endscreen").addEventListener("click", (e) => {
@@ -643,6 +646,42 @@ function launchWalkthrough() {
   if (live) runWalkthrough();
   else { newMatch(); afterRender(runWalkthrough); }
 }
+// ---- Interactive demo (ROC-191): a sample match plays itself so a new player can watch ----
+function showDemoBar(on) {
+  const el = document.getElementById("demobar");
+  if (el) { el.classList.toggle("on", on); el.setAttribute("aria-hidden", on ? "false" : "true"); }
+}
+function startDemo() {
+  hideMenu(); closeHowto(); clearTimeout(demoTimer);
+  demoMode = true;
+  state = newGame(); selectedMarket = new Set(); selectedHand = new Set();
+  initPriceWall(); render();
+  showDemoBar(true);
+  demoStep();
+}
+function demoStep() {
+  if (!demoMode) return;
+  if (state.gameOver) { // round/match ended — advance to the next round, or stop at match end
+    if (state.match && state.match.matchOver) return; // leave the final board; user exits
+    demoTimer = setTimeout(() => { if (demoMode && nextRound(state).ok) { initPriceWall(); render(); demoStep(); } }, 1600);
+    return;
+  }
+  demoTimer = setTimeout(() => {
+    if (!demoMode) return;
+    const before = state.turnIndex;
+    try { DIFFICULTY[difficulty](state, before); } catch (e) { console.error("demo step error", e); }
+    if (!state.gameOver && state.turnIndex === before) state.turnIndex = (before + 1) % PLAYER_COUNT;
+    render();
+    demoStep();
+  }, BOT_STEP_MS);
+}
+function exitDemo() {
+  demoMode = false; clearTimeout(demoTimer);
+  showDemoBar(false);
+  state = newGame(); selectedMarket = new Set(); selectedHand = new Set();
+  initPriceWall(); render();
+  showMenu(); // the real saved match (if any) is untouched — Resume stays available
+}
 function resumeMatch() {
   const saved = loadSave();
   if (!saved) { startMatch(); return; }
@@ -666,6 +705,8 @@ function initMenu() {
   document.getElementById("howto-close")?.addEventListener("click", closeHowto);
   document.getElementById("howto-ok")?.addEventListener("click", closeHowto);
   document.getElementById("howto-tour")?.addEventListener("click", launchWalkthrough);
+  document.getElementById("menu-demo")?.addEventListener("click", startDemo);
+  document.getElementById("demo-exit")?.addEventListener("click", exitDemo);
   showMenu(); // boot into the title menu (refreshResumeButton runs inside showMenu)
 }
 
