@@ -299,8 +299,8 @@ a:hover { color: var(--rare-cyan); text-shadow: var(--glow-text-ui); }
   .hex .hi{position:absolute;inset:2px;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:linear-gradient(160deg,var(--bg-panel-raised),var(--bg-inset));display:grid;place-items:center}
   .hex .hi b{font:600 9px/1 var(--font-mono);color:var(--rare-gold)}
   .seal{width:42px;height:42px;display:grid;place-items:center}
-  .seal .dm{width:30px;height:30px;transform:rotate(45deg);border:1px solid color-mix(in srgb,var(--rare-magenta) 60%,transparent);background:var(--rare-magenta-glass);box-shadow:0 0 8px rgba(255,45,150,.18);display:grid;place-items:center}
-  .seal .dm span{transform:rotate(-45deg);font:600 13px/1 var(--font-display);color:var(--rare-magenta);text-shadow:none}
+  .seal .dm{width:30px;height:30px;transform:rotate(45deg);border:1px solid color-mix(in srgb,var(--rare-cyan) 60%,transparent);background:var(--rare-cyan-glass);box-shadow:0 0 8px rgba(0,229,255,.18);display:grid;place-items:center}
+  .seal .dm span{transform:rotate(-45deg);font:600 13px/1 var(--font-display);color:var(--rare-cyan);text-shadow:none}
   /* good accents */
   .g-cyan{--ac:var(--rare-cyan);--acg:var(--glow-cyan)}
   .g-gold{--ac:var(--rare-gold);--acg:var(--glow-gold)}
@@ -788,6 +788,28 @@ body{background:var(--bg-page)}
   display:flex;align-items:flex-end}
 .op .op-portrait .op-portrait-img{height:100%;width:auto;display:block}
 .op .ophud{z-index:3} /* HUD panel reads above the portrait */
+
+/* ---- Drones Fixer seal: value + tooltip (onboarding) ---- */
+.wall .bcol.fixer{position:relative;cursor:help}
+.wall .bcol.fixer .fixval{font:700 9px/1 var(--font-mono);letter-spacing:.04em;color:var(--rare-cyan);
+  padding:2px 6px;border:1px solid color-mix(in srgb,var(--rare-cyan) 42%,transparent);border-radius:5px;
+  background:var(--rare-cyan-glass)}
+.wall .bcol.fixer .tip{position:absolute;bottom:calc(100% + 8px);right:-2px;z-index:60;width:200px;display:none;text-align:left;
+  background:rgba(12,18,26,.98);border:1px solid var(--border-panel);border-radius:8px;padding:10px 12px;
+  font:400 10px/1.55 var(--font-body);letter-spacing:.02em;color:var(--text-secondary);text-transform:none;box-shadow:var(--shadow-panel)}
+.wall .bcol.fixer .tip b{color:var(--rare-cyan);font-weight:600}
+.wall .bcol.fixer:hover .tip,.wall .bcol.fixer:focus .tip,.wall .bcol.fixer:focus-visible .tip{display:block}
+.wall .bcol.fixer:focus-visible{outline:none}
+.wall .bcol.fixer:hover .k,.wall .bcol.fixer:focus-visible .k{color:var(--rare-cyan)}
+
+/* ---- Bonus-token tooltip (onboarding, ROC-237) ---- */
+.wall .bonusgrp{position:relative;cursor:help}
+.wall .bonusgrp .tip{position:absolute;bottom:calc(100% + 8px);left:-2px;z-index:60;width:210px;display:none;text-align:left;
+  background:rgba(12,18,26,.98);border:1px solid var(--border-panel);border-radius:8px;padding:10px 12px;
+  font:400 10px/1.55 var(--font-body);letter-spacing:.02em;color:var(--text-secondary);text-transform:none;box-shadow:var(--shadow-panel)}
+.wall .bonusgrp .tip b{color:var(--accent-ui);font-weight:600}
+.wall .bonusgrp:hover .tip,.wall .bonusgrp:focus .tip,.wall .bonusgrp:focus-visible .tip{display:block}
+.wall .bonusgrp:focus-visible{outline:none}
 
 /* ---- Interactive demo banner (ROC-191 onboarding) ---- */
 #demobar{position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:440;display:none;align-items:center;gap:12px;
