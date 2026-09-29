@@ -10,6 +10,7 @@ import { DIFFICULTY, DIFFICULTY_ORDER } from "./strategies.js";
 import { SAVE_KEY, parseSave } from "./persistence.js";
 import { AVATARS } from "./avatars.js";
 import { startWalkthrough } from "./walkthrough.js";
+import { COACH_STEPS, coachAdvance, coachStepAt } from "./coach.js";
 import { mountOperatorPortrait } from "./portrait.js";
 import operatorUrl from "./operator.jpg";
 // Live opponent difficulty (ROC-208): easy=reckless, normal=heuristic, hard=1-ply lookahead.
@@ -18,7 +19,65 @@ let difficulty = "hard";
 // Presentation-only constants (kept out of the engine on purpose).
 const ACCENT_CLASS = { diamond: "a-cyan", gold: "a-gold", silver: "a-mag", cloth: "a-pur", spice: "a-grn", leather: "a-org", camel: "a-cyan" };
 const TOK_CLASS = { diamond: "t-cyan", gold: "t-gold", silver: "t-mag", cloth: "t-pur", spice: "t-grn", leather: "t-org" };
-const DRONE_SVG = '<svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.4"><line x1="4" y1="5" x2="10" y2="11"/><line x1="22" y1="5" x2="16" y2="11"/><ellipse cx="13" cy="14" rx="6" ry="4"/><circle cx="13" cy="14" r="1.6" fill="currentColor" stroke="none"/></svg>';
+// Drone v2 icon — inlined from ui-mockups/icon-drone-v2.svg (width/height stripped so it scales
+// to the fleet chip). Chrome sentry orb with a glowing cyan optic; glow trim uses currentColor.
+const DRONE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" style="color:var(--drone-trim, #4fc3d9)">
+<defs><filter id="g" x="-120%" y="-120%" width="340%" height="340%"><feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="currentColor" flood-opacity="0.95"></feDropShadow><feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="currentColor" flood-opacity="0.45"></feDropShadow></filter>
+  <clipPath id="orb"><circle cx="120" cy="120" r="90"></circle></clipPath>
+</defs>
+<g><g>
+    <path d="M68 60 L8 34 L3 56 L64 90 Z" fill="#9aa6b2" stroke="#1e252e" stroke-width="2.5" stroke-linejoin="round"></path>
+    <path d="M68 60 L8 34 L14 44 L67 68 Z" fill="#dfe6ee"></path>
+    <path d="M58 66 L18 46" fill="none" stroke="#1e252e" stroke-width="1.5" opacity="0.5"></path>
+    <path d="M67 61 L10 36" fill="none" stroke="currentColor" stroke-width="3" filter="url(#g)" stroke-linecap="round"></path>
+  </g></g><g transform="translate(240,0) scale(-1,1)"><g>
+    <path d="M68 60 L8 34 L3 56 L64 90 Z" fill="#9aa6b2" stroke="#1e252e" stroke-width="2.5" stroke-linejoin="round"></path>
+    <path d="M68 60 L8 34 L14 44 L67 68 Z" fill="#dfe6ee"></path>
+    <path d="M58 66 L18 46" fill="none" stroke="#1e252e" stroke-width="1.5" opacity="0.5"></path>
+    <path d="M67 61 L10 36" fill="none" stroke="currentColor" stroke-width="3" filter="url(#g)" stroke-linecap="round"></path>
+  </g></g>
+<path d="M112 28 L134 28 L130 44 L116 44 Z" fill="#6b7684" stroke="#1e252e" stroke-width="2.5" stroke-linejoin="round"></path>
+<circle cx="123" cy="27" r="3" fill="currentColor" filter="url(#g)" opacity="1"></circle>
+<path d="M104 200 L136 200 L130 218 L110 218 Z" fill="#6b7684" stroke="#1e252e" stroke-width="2.5" stroke-linejoin="round"></path>
+<g clip-path="url(#orb)">
+  <rect x="0" y="0" width="240" height="240" fill="#9aa6b2"></rect>
+  <ellipse cx="80" cy="66" rx="92" ry="74" fill="#cdd6df"></ellipse>
+  <path d="M240 240 L240 44 C182 84 146 152 152 240 Z" fill="#6b7684"></path>
+  <path d="M240 240 L240 158 C206 174 190 204 194 240 Z" fill="#4a535d"></path>
+  <path d="M34 104 A88 88 0 0 1 206 104 C168 78 72 78 34 104 Z" fill="#dfe6ee"></path>
+  <path d="M34 104 C72 78 168 78 206 104" fill="none" stroke="#1e252e" stroke-width="2.5" opacity="0.85"></path>
+  <path d="M165 42 A90 90 0 0 1 165 198 Q138 120 165 42 Z" fill="#5a6470"></path>
+  <path d="M165 42 Q138 120 165 198" fill="none" stroke="#1e252e" stroke-width="3"></path>
+  <path d="M26 128 C64 150 118 154 150 148" fill="none" stroke="#1e252e" stroke-width="3"></path>
+  <path d="M28 138 C64 160 116 164 146 158" fill="none" stroke="#1e252e" stroke-width="1.5" opacity="0.45"></path>
+  <path d="M40 178 C66 194 116 198 146 190" fill="none" stroke="#1e252e" stroke-width="2" opacity="0.5"></path>
+  <path d="M54 66 C68 42 98 32 120 36 C96 42 72 56 60 80 Z" fill="#ffffff" opacity="0.55"></path>
+  <path d="M58 94 C62 74 76 60 94 54" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.4" stroke-linecap="round"></path>
+  <g stroke="#1e252e" stroke-width="2" opacity="0.28" stroke-linecap="round">
+    <path d="M186 196 L204 178"></path><path d="M196 204 L212 188"></path>
+  </g>
+  <g fill="#f0f4f8"><circle cx="60" cy="98" r="2.6"></circle><circle cx="150" cy="88" r="2.4"></circle><circle cx="80" cy="188" r="2.4"></circle><circle cx="140" cy="180" r="2.2"></circle></g>
+</g>
+<circle cx="120" cy="120" r="90" fill="none" stroke="#1e252e" stroke-width="4"></circle>
+<g><path d="M61 63 L69 66 L69 83 L61 86 Z" fill="#6b7684" stroke="#1e252e" stroke-width="1.5" stroke-linejoin="round"></path></g><g transform="translate(240,0) scale(-1,1)"><path d="M61 63 L69 66 L69 83 L61 86 Z" fill="#6b7684" stroke="#1e252e" stroke-width="1.5" stroke-linejoin="round"></path></g>
+<circle cx="90" cy="126" r="37" fill="#0a1116" stroke="#1e252e" stroke-width="3"></circle>
+<circle cx="90" cy="126" r="31" fill="none" stroke="#5a6470" stroke-width="3"></circle>
+<path d="M50 116 L58 116 L58 136 L50 136 Z" fill="#6b7684" stroke="#1e252e" stroke-width="2"></path><path d="M122 116 L130 116 L130 136 L122 136 Z" fill="#6b7684" stroke="#1e252e" stroke-width="2"></path>
+<g opacity="1">
+  <circle cx="90" cy="126" r="24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-dasharray="30 11" stroke-dashoffset="8" filter="url(#g)"></circle>
+  <circle cx="90" cy="126" r="15" fill="none" stroke="currentColor" stroke-width="4" stroke-dasharray="20 8" filter="url(#g)"></circle>
+  <circle cx="90" cy="126" r="5" fill="currentColor" filter="url(#g)"></circle>
+</g>
+<g opacity="1">
+  <path d="M165 44 Q139 120 165 196" fill="none" stroke="currentColor" stroke-width="4.5" filter="url(#g)" stroke-linecap="round"></path>
+  <g stroke="currentColor" stroke-linecap="round" fill="none" filter="url(#g)">
+    <path d="M171.4 85.3 L186.3 75.3" stroke-width="4"></path><path d="M180.2 105.0 L197.6 100.6" stroke-width="4"></path><path d="M181.7 126.5 L199.6 128.4" stroke-width="4"></path><path d="M175.7 147.2 L191.9 155.1" stroke-width="4"></path><path d="M163.1 164.6 L175.6 177.5" stroke-width="3.5"></path>
+  </g>
+  <path d="M34 148 A90 90 0 0 0 92 208" fill="none" stroke="currentColor" stroke-width="4" filter="url(#g)" stroke-linecap="round" opacity="0.8"></path>
+  <path d="M40 120 C56 134 66 140 62 154" fill="none" stroke="currentColor" stroke-width="4" filter="url(#g)" stroke-linecap="round"></path>
+  <circle cx="140" cy="70" r="4" fill="currentColor" filter="url(#g)"></circle>
+</g>
+</svg>`;
 const AV_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h6"/></svg>';
 const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 
@@ -26,7 +85,7 @@ const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 let state = newGame();
 let selectedMarket = new Set();
 let selectedHand = new Set();
-let demoMode = false, demoTimer = null; // interactive demo: all four seats auto-play (ROC-191)
+let coachMode = false, coachStep = 0;   // interactive hands-on tutorial (NMK-57)
 
 // ---- HTML builders ----
 function cardHTML(good, { selected, playable, zone, idx }) {
@@ -272,6 +331,7 @@ function render() {
   const opRank = rankById[0]; // the Operator's own standing
   const opRankEl = document.getElementById("op-rank");
   opRankEl.textContent = opRank ? (opRank.isLeader ? "★" : "#" + opRank.rank) : "";
+  opRankEl.style.display = opRank ? "" : "none";
   opRankEl.classList.toggle("lead", !!(opRank && opRank.isLeader));
 
   const nH = human.hand.length;
@@ -327,7 +387,7 @@ const sealDots = (n) => {
 function updateEndScreen() {
   const el = document.getElementById("endscreen");
   if (!el) return;
-  if (demoMode || !state.gameOver) { el.classList.remove("on"); el.setAttribute("aria-hidden", "true"); return; }
+  if (!state.gameOver) { el.classList.remove("on"); el.setAttribute("aria-hidden", "true"); return; }
   const m = state.match, matchOver = !!(m && m.matchOver);
   const winners = matchOver ? (m.matchWinners || []) : (m && m.lastRound ? m.lastRound.winners : []);
   const ringed = new Set(winners);
@@ -439,7 +499,6 @@ function showError(msg) { const h = document.getElementById("dock-hint"); h.text
 
 // ---- Interaction ----
 function onCardClick(e) {
-  if (demoMode) return; // board is auto-playing
   const el = e.target.closest(".card");
   if (!el || state.gameOver || !state.players[state.turnIndex].isHuman) return;
   const set = el.dataset.zone === "market" ? selectedMarket : selectedHand;
@@ -451,7 +510,6 @@ document.getElementById("market-cards").addEventListener("click", onCardClick);
 document.getElementById("hand").addEventListener("click", onCardClick);
 
 function requirePlayerTurn() {
-  if (demoMode) return false; // ignore dock actions while the demo auto-plays
   if (state.gameOver) { showError("Match over — reset to play again."); return false; }
   if (!state.players[state.turnIndex].isHuman) { showError("Wait for your turn."); return false; }
   return true;
@@ -467,7 +525,7 @@ document.getElementById("btn-primary").addEventListener("click", () => {
   else if (a.kind === "exchange") afterPlayerAction(exchangeCards(state, 0, { handIdxs: [], camels: a.need }, [...selectedMarket]));
 });
 document.getElementById("btn-clear").addEventListener("click", () => { selectedMarket = new Set(); selectedHand = new Set(); render(); });
-document.getElementById("btn-reset").addEventListener("click", () => { if (demoMode) return; state = newGame(); selectedMarket = new Set(); selectedHand = new Set(); initPriceWall(); render(); });
+document.getElementById("btn-reset").addEventListener("click", () => { state = newGame(); selectedMarket = new Set(); selectedHand = new Set(); initPriceWall(); render(); });
 
 // End-screen buttons: continue to the next round, or start a fresh match.
 document.getElementById("endscreen").addEventListener("click", (e) => {
@@ -488,6 +546,7 @@ function afterPlayerAction(res) {
   if (!res.ok) { showError(res.error); return; }
   selectedMarket = new Set(); selectedHand = new Set();
   render(); saveGame(); stepBotsIfNeeded(state);
+  if (coachMode) advanceCoach(); // NMK-57: any valid move advances the tutorial (loose gating)
 }
 const BOT_STEP_MS = 700; // delay between bot moves so the player can follow each rival's action
 function stepBotsIfNeeded(gameRef) {
@@ -636,7 +695,7 @@ function newMatch() {
 }
 function startMatch() {
   newMatch();
-  if (!onboarded()) afterRender(runWalkthrough); // first-run guided tour
+  if (!onboarded()) afterRender(showFirstRunChoice); // NMK-57: first-run offers a choice
 }
 // Replay entry point (from the How to Play panel). Ensures a live board, then runs the tour.
 function launchWalkthrough() {
@@ -646,41 +705,67 @@ function launchWalkthrough() {
   if (live) runWalkthrough();
   else { newMatch(); afterRender(runWalkthrough); }
 }
-// ---- Interactive demo (ROC-191): a sample match plays itself so a new player can watch ----
-function showDemoBar(on) {
-  const el = document.getElementById("demobar");
-  if (el) { el.classList.toggle("on", on); el.setAttribute("aria-hidden", on ? "false" : "true"); }
-}
-function startDemo() {
-  hideMenu(); closeHowto(); clearTimeout(demoTimer);
-  demoMode = true;
-  state = newGame(); selectedMarket = new Set(); selectedHand = new Set();
-  initPriceWall(); render();
-  showDemoBar(true);
-  demoStep();
-}
-function demoStep() {
-  if (!demoMode) return;
-  if (state.gameOver) { // round/match ended — advance to the next round, or stop at match end
-    if (state.match && state.match.matchOver) return; // leave the final board; user exits
-    demoTimer = setTimeout(() => { if (demoMode && nextRound(state).ok) { initPriceWall(); render(); demoStep(); } }, 1600);
-    return;
+// ---- Interactive hands-on tutorial (NMK-57): non-blocking coach on a live match ----
+function showFirstRunChoice() {
+  let el = document.getElementById("firstrun");
+  if (!el) {
+    el = document.createElement("div"); el.id = "firstrun";
+    el.innerHTML = `<div class="fr-box" role="dialog" aria-modal="true">
+      <div class="fr-kick">First time, Operator?</div>
+      <h2 class="fr-title">Learn the Night Market</h2>
+      <p class="fr-sub">Play a guided round where the game leads you through each move as you make it — or take the quick read-through tour instead.</p>
+      <button class="fr-cta" id="fr-tutorial">▶ Interactive tutorial</button>
+      <button class="fr-alt" id="fr-tour">Quick tour</button>
+      <button class="fr-skip" id="fr-skip">Skip for now</button>
+    </div>`;
+    document.body.appendChild(el);
+    el.querySelector("#fr-tutorial").addEventListener("click", () => { hideFirstRun(); startCoach(); });
+    el.querySelector("#fr-tour").addEventListener("click", () => { hideFirstRun(); runWalkthrough(); });
+    el.querySelector("#fr-skip").addEventListener("click", () => { hideFirstRun(); setOnboarded(); });
   }
-  demoTimer = setTimeout(() => {
-    if (!demoMode) return;
-    const before = state.turnIndex;
-    try { DIFFICULTY[difficulty](state, before); } catch (e) { console.error("demo step error", e); }
-    if (!state.gameOver && state.turnIndex === before) state.turnIndex = (before + 1) % PLAYER_COUNT;
-    render();
-    demoStep();
-  }, BOT_STEP_MS);
+  el.classList.add("on");
 }
-function exitDemo() {
-  demoMode = false; clearTimeout(demoTimer);
-  showDemoBar(false);
-  state = newGame(); selectedMarket = new Set(); selectedHand = new Set();
-  initPriceWall(); render();
-  showMenu(); // the real saved match (if any) is untouched — Resume stays available
+function hideFirstRun() { document.getElementById("firstrun")?.classList.remove("on"); }
+
+function startCoach() {
+  if (!state || (state.match && state.match.matchOver)) newMatch();
+  coachMode = true; coachStep = 0;
+  showCoachStep();
+}
+// Replay entry point (menu / How-to): fresh live match + coach.
+function launchCoach() { closeHowto(); newMatch(); startCoach(); } // newMatch() renders synchronously
+
+function advanceCoach() {
+  const next = coachAdvance(coachStep);
+  if (next === "done") { endCoach(); return; }
+  coachStep = next;
+  showCoachStep(); // afterPlayerAction already re-rendered; targets are present
+}
+function endCoach() {
+  coachMode = false;
+  document.getElementById("coach")?.remove();
+  document.querySelectorAll(".coach-lit").forEach((n) => n.classList.remove("coach-lit"));
+  setOnboarded();
+}
+function showCoachStep() {
+  const step = coachStepAt(coachStep);
+  if (!step) { endCoach(); return; }
+  let el = document.getElementById("coach");
+  if (!el) { el = document.createElement("div"); el.id = "coach"; document.body.appendChild(el); }
+  const total = COACH_STEPS.length;
+  el.innerHTML = `<div class="coach-pop" role="dialog" aria-live="polite">
+      <div class="coach-head"><span class="coach-kick">Step ${coachStep + 1} of ${total}${step.final ? "" : " · your move"}</span>
+        <button class="coach-skip" id="coach-skip" type="button" aria-label="Skip tutorial">Skip ✕</button></div>
+      <div class="coach-title">${step.title}</div>
+      <p class="coach-body">${step.body}</p>
+      ${step.final ? `<button class="coach-finish" id="coach-finish" type="button">Got it →</button>`
+                   : `<div class="coach-hint">↳ I'll move on as soon as you make any valid move.</div>`}
+    </div>`;
+  el.querySelector("#coach-skip")?.addEventListener("click", endCoach);
+  el.querySelector("#coach-finish")?.addEventListener("click", endCoach);
+  document.querySelectorAll(".coach-lit").forEach((n) => n.classList.remove("coach-lit"));
+  const tgt = step.target ? document.querySelector(step.target) : null;
+  if (tgt) tgt.classList.add("coach-lit");
 }
 function resumeMatch() {
   const saved = loadSave();
@@ -705,8 +790,7 @@ function initMenu() {
   document.getElementById("howto-close")?.addEventListener("click", closeHowto);
   document.getElementById("howto-ok")?.addEventListener("click", closeHowto);
   document.getElementById("howto-tour")?.addEventListener("click", launchWalkthrough);
-  document.getElementById("menu-demo")?.addEventListener("click", startDemo);
-  document.getElementById("demo-exit")?.addEventListener("click", exitDemo);
+  document.getElementById("menu-tutorial")?.addEventListener("click", launchCoach);
   showMenu(); // boot into the title menu (refreshResumeButton runs inside showMenu)
 }
 

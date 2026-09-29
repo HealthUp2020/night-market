@@ -20,7 +20,6 @@
       <div class="cable" style="left:1200px;height:70px"></div>
       <div class="sign glyph" style="left:330px;top:250px;font-size:110px;color:var(--rare-magenta)">ᛰ⌇</div>
       <div class="sign glyph" style="right:340px;top:150px;font-size:84px;color:var(--rare-cyan)">⟠⌇ᚼ</div>
-      <div class="sign" style="left:50%;top:56px;transform:translateX(-50%);font-size:44px;color:var(--rare-gold);writing-mode:horizontal-tb;white-space:nowrap">// NIGHT BAZAAR //</div>
       <div class="steam" style="left:520px;bottom:150px;width:300px;height:160px"></div>
       <div class="steam" style="right:420px;bottom:120px;width:260px;height:140px"></div>
       <div class="rain"></div>
@@ -56,8 +55,16 @@
       <div class="wfoot">
         <div class="fh">Bonus Tokens // Fixer Seal</div>
         <div class="frow">
-          <div class="bset" id="price-bonus"></div>
-          <div class="bcol"><div class="seal"><div class="dm"><span>印</span></div></div><span class="k" style="color:var(--rare-magenta)">FIXER</span></div>
+          <div class="bonusgrp" tabindex="0" aria-label="Sell-bonus tokens: sell 3, 4, or 5+ of one good for an extra bonus token">
+            <div class="bset" id="price-bonus"></div>
+            <span class="tip" role="tooltip"><b>Bonus tokens.</b>Sell <b>3, 4, or 5+</b> of one good in a single turn to draw an extra bonus token from that tier (×3 / ×4 / ×5+), banked on top of the sale.</span>
+          </div>
+          <div class="bcol fixer" tabindex="0" aria-label="Drones Fixer: +5 Gold for the largest drone fleet at round's end">
+            <div class="seal"><div class="dm"><span>印</span></div></div>
+            <span class="k" style="color:var(--rare-cyan)">DRONES FIXER</span>
+            <span class="fixval">+5 Gold</span>
+            <span class="tip" role="tooltip"><b>Drones Fixer.</b>Hold the largest drone fleet when the round ends and you earn <b>+5 Gold</b> (Fixer Reputation). A tie awards no one.</span>
+          </div>
         </div>
       </div>
     </div>
@@ -73,16 +80,11 @@
             <div class="face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span class="cnt" id="deck-count">0</span></div>
           </div>
           <span class="k">DECK</span>
-          <div class="discard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg></div>
-          <span class="k">DISCARD</span>
         </div>
       </div>
     </div>
 
     <!-- flow markers -->
-    <div class="flow" style="right:318px;top:150px;flex-direction:column;gap:3px">
-      <svg viewBox="0 0 22 13" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M20 6.5H2M8 2 2 6.5l6 4.5"/></svg><span style="font-size:6.5px">DRAW</span>
-    </div>
     <div class="flow" style="left:786px;top:430px;flex-direction:column;gap:3px">
       <span style="font-size:6.5px">TAKE ↓</span>
       <svg viewBox="0 0 13 22" fill="none" stroke="currentColor" stroke-width="1.4" style="width:13px;height:22px"><path d="M6.5 2v18M2 13l4.5 6 4.5-6"/></svg>
@@ -118,7 +120,7 @@
 
       <div class="glass ophud"><div class="sheen"></div>
         <div class="ohinfo">
-          <div class="nm">Operator // You <span class="oprank" id="op-rank"></span></div>
+          <div class="nm"><span class="oprank" id="op-rank"></span>Operator // You</div>
           <div class="score"><b id="op-score">0</b><span class="u">Gold</span></div>
           <div class="mini"><div class="st"><span class="k">HAND</span><span class="v" id="op-hand">0</span></div><div class="st"><span class="k">FLEET</span><span class="v" id="op-fleet">0</span></div><div class="st"><span class="k">DECK</span><span class="v" id="op-deck">0</span></div></div>
         </div>
@@ -180,16 +182,9 @@
     <button id="menu-resume" class="mcta ghost" style="display:none">RESUME MATCH →</button>
     <button id="menu-start" class="mcta">ENTER THE MARKET →</button>
     <button id="menu-howto" class="mlink" type="button">How to play</button>
-    <button id="menu-demo" class="mlink" type="button">▶ Watch a demo</button>
+    <button id="menu-tutorial" class="mlink" type="button">▶ Interactive tutorial</button>
     <div class="mrivals">RIVALS ONLINE &nbsp;·&nbsp; <b>VULT-3R</b> &nbsp; <b>NØMAD</b> &nbsp; <b>SPECTRE-9</b></div>
   </div>
-</div>
-
-<!-- Demo mode banner (ROC-191 onboarding): shown while a sample round auto-plays -->
-<div id="demobar" aria-hidden="true">
-  <span class="dm-dot"></span>
-  <b>DEMO</b><span class="dm-sub">watching a sample round — the operators play themselves</span>
-  <button id="demo-exit" type="button">EXIT DEMO →</button>
 </div>
 
 <!-- How to Play — rules panel (ROC-191); opened from menu or the in-game "?" -->
