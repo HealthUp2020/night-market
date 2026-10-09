@@ -3,7 +3,7 @@ import { CARD_ART } from "./card-art.js"; // illustration SVGs extracted from ui
 import {
   GOODS, GOODS_EN, RARE, TOKEN_TEMPLATE, PLAYER_COUNT, SEALS_TO_WIN, HAND_LIMIT,
   PILES_TO_END, emptyPileCount, standings,
-  newGame, nextRound, takeCard, takeCamels, sellCards, exchangeCards, botPlay,
+  newGame, nextRound, takeCard, takeCamels, sellCards, exchangeCards, botPlay, suggestMove,
 } from "./engine.js";
 import { fitScale, isTooSmall } from "./layout.js";
 import { DIFFICULTY, DIFFICULTY_ORDER } from "./strategies.js";
@@ -349,6 +349,7 @@ function render() {
   updateDock(human, playable);
   updateProgress();
   updateEndScreen();
+  armIdleHint(); // NMK-61: (re)start the idle countdown; suppressed unless it's the human's live turn
 }
 
 // ---- Match/round progress HUD (ROC-210): round + seals + supply-collapse + deck ----
@@ -561,6 +562,51 @@ function stepBotsIfNeeded(gameRef) {
     render(); saveGame();
     stepBotsIfNeeded(state);
   }, BOT_STEP_MS);
+}
+
+// ---- Idle move hint (NMK-61): after a gentle idle delay on the human's turn, pulse the card(s)
+// a strong player would act on. Always on, no text, no auto-play. The suggestion comes from the
+// same bot-AI decision (suggestMove) so the hint never disagrees with how rivals actually play.
+const IDLE_HINT_MS = 20000; // 20s — gentle: only nudge a player who's genuinely stalled
+let idleTimer = null;
+const HINT_CLASS = "move-hint";
+function clearMoveHint() {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+  document.querySelectorAll("." + HINT_CLASS).forEach((n) => n.classList.remove(HINT_CLASS));
+}
+function hintSuppressed() {
+  return state.gameOver
+    || !state.players[state.turnIndex]?.isHuman
+    || coachMode // NMK-57 tutorial is already guiding
+    || !!document.getElementById("menu")?.classList.contains("on")
+    || !!document.getElementById("firstrun")?.classList.contains("on");
+}
+function litCards(zone, idxs) {
+  const root = document.getElementById(zone === "hand" ? "hand" : "market-cards");
+  for (const i of idxs) root?.querySelector(`.card[data-idx="${i}"]`)?.classList.add(HINT_CLASS);
+}
+function showMoveHint() {
+  document.querySelectorAll("." + HINT_CLASS).forEach((n) => n.classList.remove(HINT_CLASS));
+  if (hintSuppressed()) return;
+  const move = suggestMove(state, 0);
+  if (!move || move.kind === "skip") return; // nothing worth pointing at
+  if (move.kind === "take") litCards("market", [move.idx]);
+  else if (move.kind === "exchange") litCards("market", move.marketIdxs);
+  else if (move.kind === "drones") {
+    const droneIdxs = state.market.map((c, i) => (c === "camel" ? i : -1)).filter((i) => i >= 0);
+    litCards("market", droneIdxs);
+  } else if (move.kind === "sell") {
+    const human = state.players[0];
+    const idxs = human.hand.map((c, i) => (c === move.good ? i : -1)).filter((i) => i >= 0).slice(0, move.count);
+    litCards("hand", idxs);
+  }
+  idleTimer = setTimeout(showMoveHint, IDLE_HINT_MS); // re-evaluate against the live board while idle
+}
+// Restart the idle countdown. Called after every render, so any board change or interaction resets it.
+function armIdleHint() {
+  clearMoveHint();
+  if (hintSuppressed()) return;
+  idleTimer = setTimeout(showMoveHint, IDLE_HINT_MS);
 }
 
 // ---- Scale the fixed 1600x900 stage to fit the viewport (contain, never clipped) ----
