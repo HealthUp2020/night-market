@@ -147,19 +147,20 @@
 <!-- End-of-round / match-over screen (ROC-193); filled + toggled by updateEndScreen() -->
 <div id="endscreen" aria-hidden="true"></div>
 
-<!-- Too-small fallback (ROC-202): shown when viewport < 1024×640; toggled by fitStage -->
+<!-- Rotate hint (NMK-67): the game is landscape-only for now; portrait viewports see this. Toggled by fitStage. -->
 <div id="toosmall" aria-hidden="true">
   <div class="ts-box">
-    <svg class="ts-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>
-      <path d="M9 12h6M12 9v6"/>
+    <svg class="ts-ico ts-rot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="4" y="2" width="16" height="20" rx="2"/>
+      <path d="M2 13a10 10 0 0 0 10 9M22 11a10 10 0 0 0-10-9"/>
+      <path d="M12 22l2.2-2.2M12 2L9.8 4.2"/>
     </svg>
-    <h1 class="ts-h">SIGNAL TOO <b>WEAK</b></h1>
-    <p class="ts-p">NIGHT MARKET needs a display of at least 1024 × 640. Enlarge the window or switch to a larger screen to reconnect to the market.</p>
+    <h1 class="ts-h">ROTATE TO <b>PLAY</b></h1>
+    <p class="ts-p">Night Market runs in landscape. Turn your device sideways to enter the market — a dedicated mobile layout is coming later.</p>
     <div class="ts-read">
       <span><span class="ts-k">CURRENT</span> <span class="ts-cur">—</span></span>
       <span class="ts-sep">//</span>
-      <span><span class="ts-k">REQUIRED</span> <span class="ts-req">1024 × 640</span></span>
+      <span><span class="ts-k">BEST</span> <span class="ts-req">LANDSCAPE</span></span>
     </div>
   </div>
 </div>

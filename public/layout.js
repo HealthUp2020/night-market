@@ -23,3 +23,12 @@ export function isTooSmall(vw, vh, minW = MIN_W, minH = MIN_H) {
   if (!(vw > 0) || !(vh > 0)) return true;
   return vw < minW || vh < minH;
 }
+
+// The game plays in LANDSCAPE only for now (a dedicated mobile/portrait layout is the Mobile
+// epic, built later). Decide what a viewport should show: render the contain-scaled stage, or
+// ask the player to rotate. Landscape renders at any size (it just scales down); portrait — and
+// any non-positive/NaN input — shows the rotate hint instead of an unusable squeeze.
+export function screenMode(vw, vh) {
+  if (!(vw > 0) || !(vh > 0)) return "rotate";
+  return vw >= vh ? "ok" : "rotate";
+}

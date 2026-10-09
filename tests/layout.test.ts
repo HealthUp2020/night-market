@@ -1,7 +1,7 @@
 // NIGHT MARKET — layout.js tests (pure contain-fit scale math, no DOM).
 // Run: `bun test`.
 import { test, expect, describe } from "bun:test";
-import { fitScale, STAGE_W, STAGE_H, isTooSmall, MIN_W, MIN_H } from "../public/layout.js";
+import { fitScale, STAGE_W, STAGE_H, isTooSmall, MIN_W, MIN_H, screenMode } from "../public/layout.js";
 
 describe("constants", () => {
   test("STAGE_W is 1600", () => {
@@ -266,5 +266,41 @@ describe("isTooSmall", () => {
 
   test("very large negative-like edge: -0 is treated as too small (not > 0)", () => {
     expect(isTooSmall(-0, 640)).toBe(true);
+  });
+});
+
+describe("screenMode — landscape-only gate (NMK-67)", () => {
+  test.each([
+    [1920, 1080], [1366, 768], [1024, 768], [1180, 820], [1194, 834], [844, 390], [200, 100],
+  ])("landscape %ix%i -> ok", (w, h) => {
+    expect(screenMode(w, h)).toBe("ok");
+  });
+
+  test("square viewport is ok", () => {
+    expect(screenMode(800, 800)).toBe("ok");
+  });
+
+  test.each([
+    [820, 1180], [834, 1194], [768, 1024], [390, 844],
+  ])("portrait %ix%i -> rotate", (w, h) => {
+    expect(screenMode(w, h)).toBe("rotate");
+  });
+
+  test("boundary: vw = vh-1 rotate, vw = vh ok, vw = vh+1 ok", () => {
+    expect(screenMode(499, 500)).toBe("rotate");
+    expect(screenMode(500, 500)).toBe("ok");
+    expect(screenMode(501, 500)).toBe("ok");
+  });
+
+  test.each([
+    [0, 100], [100, 0], [0, 0], [-100, 100], [100, -100],
+    [NaN, 100], [100, NaN], [undefined, 100], [100, undefined],
+  ])("degenerate %p x %p -> rotate", (w, h) => {
+    expect(screenMode(w as any, h as any)).toBe("rotate");
+  });
+
+  test("Infinity width with finite height does not throw and is ok", () => {
+    expect(() => screenMode(Infinity, 100)).not.toThrow();
+    expect(screenMode(Infinity, 100)).toBe("ok");
   });
 });
