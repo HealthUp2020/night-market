@@ -4,6 +4,7 @@ import {
   GOODS, GOODS_EN, RARE, TOKEN_TEMPLATE, PLAYER_COUNT, SEALS_TO_WIN, HAND_LIMIT,
   PILES_TO_END, emptyPileCount, standings,
   newGame, nextRound, takeCard, takeCamels, sellCards, exchangeCards, botPlay, suggestMove,
+  ensureTutorialAction,
 } from "./engine.js";
 import { fitScale, isTooSmall } from "./layout.js";
 import { DIFFICULTY, DIFFICULTY_ORDER } from "./strategies.js";
@@ -350,6 +351,7 @@ function render() {
   updateProgress();
   updateEndScreen();
   armIdleHint(); // NMK-61: (re)start the idle countdown; suppressed unless it's the human's live turn
+  if (coachMode) coachReapplyAfterRender(); // NMK-66: keep the lesson highlight + dim through renders
 }
 
 // ---- Match/round progress HUD (ROC-210): round + seals + supply-collapse + deck ----
@@ -520,13 +522,14 @@ document.getElementById("btn-primary").addEventListener("click", () => {
   if (!requirePlayerTurn()) return;
   const a = currentAction(state.players[0]);
   if (!a.enabled) { if (a.hint) showError(a.hint); return; }
+  if (!coachAllowsAction(a.kind)) return; // NMK-66: strict step gating — one lesson at a time
   if (a.kind === "take") afterPlayerAction(takeCard(state, 0, a.idx));
   else if (a.kind === "sell") afterPlayerAction(sellCards(state, 0, a.good, selectedHand.size));
   else if (a.kind === "drones") afterPlayerAction(takeCamels(state, 0));
   else if (a.kind === "exchange") afterPlayerAction(exchangeCards(state, 0, { handIdxs: [], camels: a.need }, [...selectedMarket]));
 });
 document.getElementById("btn-clear").addEventListener("click", () => { selectedMarket = new Set(); selectedHand = new Set(); render(); });
-document.getElementById("btn-reset").addEventListener("click", () => { state = newGame(); selectedMarket = new Set(); selectedHand = new Set(); initPriceWall(); render(); });
+document.getElementById("btn-reset").addEventListener("click", () => { if (coachMode) { showError("Finish or skip the tutorial first."); return; } state = newGame(); selectedMarket = new Set(); selectedHand = new Set(); initPriceWall(); render(); });
 
 // End-screen buttons: continue to the next round, or start a fresh match.
 document.getElementById("endscreen").addEventListener("click", (e) => {
@@ -551,7 +554,12 @@ function afterPlayerAction(res) {
 }
 const BOT_STEP_MS = 700; // delay between bot moves so the player can follow each rival's action
 function stepBotsIfNeeded(gameRef) {
-  if (gameRef.gameOver || gameRef.players[gameRef.turnIndex].isHuman) { render(); return; }
+  if (gameRef.gameOver || gameRef.players[gameRef.turnIndex].isHuman) {
+    // NMK-66: when the tutorial's turn returns to the human, guarantee the step's board + highlight.
+    if (coachMode && !gameRef.gameOver && gameRef.players[gameRef.turnIndex].isHuman) coachPrepareTurn();
+    else render();
+    return;
+  }
   setTimeout(() => {
     if (state !== gameRef) return; // dropped after "Reset match"
     const before = state.turnIndex;
@@ -777,6 +785,7 @@ function startCoach() {
   if (!state || (state.match && state.match.matchOver)) newMatch();
   coachMode = true; coachStep = 0;
   showCoachStep();
+  coachPrepareTurn(); // NMK-66: guarantee the board supports step 1 + highlight its cards
 }
 // Replay entry point (menu / How-to): fresh live match + coach.
 function launchCoach() { closeHowto(); newMatch(); startCoach(); } // newMatch() renders synchronously
@@ -791,6 +800,7 @@ function endCoach() {
   coachMode = false;
   document.getElementById("coach")?.remove();
   document.querySelectorAll(".coach-lit").forEach((n) => n.classList.remove("coach-lit"));
+  applyCoachDim(null); // lift any zone dimming
   setOnboarded();
 }
 function showCoachStep() {
@@ -805,13 +815,92 @@ function showCoachStep() {
       <div class="coach-title">${step.title}</div>
       <p class="coach-body">${step.body}</p>
       ${step.final ? `<button class="coach-finish" id="coach-finish" type="button">Got it →</button>`
-                   : `<div class="coach-hint">↳ I'll move on as soon as you make any valid move.</div>`}
+                   : `<div class="coach-hint">↳ Do this step to continue — the rest is dimmed for now.</div>`}
     </div>`;
   el.querySelector("#coach-skip")?.addEventListener("click", endCoach);
   el.querySelector("#coach-finish")?.addEventListener("click", endCoach);
+  // Specific-card highlighting happens in coachPrepareTurn (once the board is guaranteed and it's
+  // the player's turn); here we just clear any stale highlight so the popover text leads.
   document.querySelectorAll(".coach-lit").forEach((n) => n.classList.remove("coach-lit"));
-  const tgt = step.target ? document.querySelector(step.target) : null;
-  if (tgt) tgt.classList.add("coach-lit");
+}
+
+// NMK-66: when it's the human's turn during the tutorial, guarantee the current step's action is
+// possible on the live board, then highlight the exact card(s) to act on.
+function coachPrepareTurn() {
+  if (!coachMode || state.gameOver || !state.players[state.turnIndex]?.isHuman) { render(); return; }
+  const step = coachStepAt(coachStep);
+  if (step && step.kind) ensureTutorialAction(state, 0, step.kind); // top up the board first
+  render(); // render() re-applies the lesson highlight + off-limits dim via coachReapplyAfterRender
+  saveGame();
+}
+// Re-assert the current lesson's highlight + dim after any render (selection, bot step, etc.) so
+// they persist while the player interacts — cleared when it isn't the player's turn on a kind step.
+function coachReapplyAfterRender() {
+  if (!coachMode) return;
+  const onKindStep = !state.gameOver && state.players[state.turnIndex]?.isHuman;
+  const step = onKindStep ? coachStepAt(coachStep) : null;
+  if (!step || !step.kind) {
+    document.querySelectorAll(".coach-lit").forEach((n) => n.classList.remove("coach-lit"));
+    applyCoachDim(null);
+    return;
+  }
+  coachLightCards(step.kind);
+  applyCoachDim(step.kind);
+}
+
+// Strict step gating (NMK-66): during a lesson, only that step's action is accepted; everything
+// else is redirected so the player learns one thing at a time.
+function coachAllowsAction(kind) {
+  if (!coachMode) return true;
+  const step = coachStepAt(coachStep);
+  if (!step || !step.kind) return true;   // final / free-play step: anything goes
+  if (kind === step.kind) return true;
+  showError(coachRedirectHint(step.kind)); // wrong action — point them back to the lesson
+  return false;
+}
+function coachRedirectHint(kind) {
+  switch (kind) {
+    case "take": return "First, take a card — tap a good in the market, then the action button.";
+    case "sell": return "Let's sell first — pick matching goods in your hand, then press Sell.";
+    case "drones": return "Sweep the drones first — select the drones in the market.";
+    case "exchange": return "Now exchange — pick 2 market cards to trade for your drones.";
+    default: return "Follow the current step first.";
+  }
+}
+// The zone the current lesson acts in; the other zone is dimmed and made inert.
+function coachTargetZone(kind) { return kind === "sell" ? "hand" : "market"; }
+function applyCoachDim(kind) {
+  const hand = document.getElementById("hand");
+  const market = document.getElementById("market-cards");
+  hand?.classList.remove("coach-dim"); market?.classList.remove("coach-dim");
+  if (!kind) return; // nothing locked
+  if (coachTargetZone(kind) === "hand") market?.classList.add("coach-dim");
+  else hand?.classList.add("coach-dim");
+}
+// Add the `.coach-lit` highlight to the exact cards a step's action applies to.
+function coachLightCards(kind) {
+  document.querySelectorAll(".coach-lit").forEach((n) => n.classList.remove("coach-lit"));
+  const human = state.players[0];
+  const lite = (zone, idxs) => {
+    const root = document.getElementById(zone === "hand" ? "hand" : "market-cards");
+    for (const i of idxs) root?.querySelector(`.card[data-idx="${i}"]`)?.classList.add("coach-lit");
+  };
+  if (kind === "drones") {
+    lite("market", state.market.map((c, i) => (c === "camel" ? i : -1)).filter((i) => i >= 0));
+  } else if (kind === "take") {
+    const i = state.market.findIndex((c) => c !== "camel");
+    if (i >= 0) lite("market", [i]);
+  } else if (kind === "exchange") {
+    lite("market", state.market.map((c, i) => (c !== "camel" ? i : -1)).filter((i) => i >= 0).slice(0, 2));
+  } else if (kind === "sell") {
+    const counts = {}; human.hand.forEach((c) => (counts[c] = (counts[c] || 0) + 1));
+    let g = null;
+    for (const good of Object.keys(counts)) {
+      const min = RARE.has(good) ? 2 : 1;
+      if (counts[good] >= min && (state.tokens[good]?.length || 0) > 0) { g = good; break; }
+    }
+    if (g) lite("hand", human.hand.map((c, i) => (c === g ? i : -1)).filter((i) => i >= 0));
+  }
 }
 function resumeMatch() {
   const saved = loadSave();

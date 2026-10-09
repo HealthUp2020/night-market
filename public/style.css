@@ -840,6 +840,9 @@ body{background:var(--bg-page)}
 #coach .coach-finish{margin-top:2px;cursor:pointer;border:0;border-radius:8px;font:700 11px/1 var(--font-display);letter-spacing:.1em;color:#04121a;background:var(--rare-cyan);padding:10px 16px}
 .coach-lit{outline:2px solid var(--rare-cyan);outline-offset:3px;box-shadow:0 0 22px 3px rgba(0,229,255,.45);border-radius:6px}
 
+/* ---- Tutorial strict gating (NMK-66): dim + disable the off-limits zone for the current step ---- */
+.coach-dim{opacity:.32;filter:grayscale(.75);pointer-events:none;transition:opacity .2s ease,filter .2s ease}
+
 /* ---- Idle move hint (NMK-61): gentle pulse on the suggested card(s); no text ---- */
 .card.move-hint{position:relative;z-index:5;border-radius:8px;outline:2px solid var(--rare-cyan);outline-offset:2px;
   animation:move-hint-pulse 1.5s ease-in-out infinite}
