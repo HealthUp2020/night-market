@@ -214,8 +214,19 @@ export function endTurn(state, playerIdx) {
 }
 
 // ---- Bot AI (heuristic) ----
-export function botPlay(state, playerIdx) {
-  if (state.gameOver || state.turnIndex !== playerIdx) return;
+// The decision and its application are kept separate so the same reasoning can drive both the
+// bots and the idle "suggested move" hint (NMK-61). `decideMove` is PURE — it reads `state` and
+// returns a move descriptor without mutating anything; `applyMove` performs it; `botPlay` chains
+// the two so a bot and the hint can never disagree about the strong move.
+//
+// Move descriptors:
+//   { kind: "sell", good, count }
+//   { kind: "drones" }                                  // sweep every drone from the market
+//   { kind: "take", idx }                               // take one goods card at market index idx
+//   { kind: "exchange", handIdxs, camels, marketIdxs }  // give hand cards/drones, take market cards
+//   { kind: "skip" }                                    // no legal move
+export function decideMove(state, playerIdx) {
+  if (state.gameOver || state.turnIndex !== playerIdx) return null;
   const p = state.players[playerIdx], hand = p.hand, counts = goodsInHand(hand);
   let bonusSell = null, bigCommonSell = null, anySell = null;
   for (const good of GOODS) {
@@ -230,23 +241,47 @@ export function botPlay(state, playerIdx) {
   }
   const pressure = hand.length >= HAND_LIMIT - 1;
   const sell = bonusSell || bigCommonSell || (pressure ? anySell : null);
-  if (sell) { sellCards(state, playerIdx, sell.good, sell.count); return; }
+  if (sell) return { kind: "sell", good: sell.good, count: sell.count };
   const camels = state.market.filter((c) => c === "camel").length;
-  if (camels >= 2) { takeCamels(state, playerIdx); return; }
+  if (camels >= 2) return { kind: "drones" };
   if (hand.length < HAND_LIMIT) {
     const nonCamel = state.market.map((c, i) => ({ c, i })).filter((x) => x.c !== "camel");
     if (nonCamel.length) {
       const score = (c) => { let s = RARE.has(c) ? 4 : 1; if (counts[c]) s += 2; const pile = state.tokens[c]; if (pile && pile.length) s += pile[0] / 10; return s; };
-      nonCamel.sort((a, b) => score(b.c) - score(a.c)); takeCard(state, playerIdx, nonCamel[0].i); return;
+      const best = nonCamel.slice().sort((a, b) => score(b.c) - score(a.c))[0];
+      return { kind: "take", idx: best.i };
     }
   }
-  if (camels > 0) { takeCamels(state, playerIdx); return; }
+  if (camels > 0) return { kind: "drones" };
   const mkt = state.market.map((c, i) => (c !== "camel" ? i : -1)).filter((i) => i >= 0);
   const give = Math.min(2, hand.length, mkt.length);
   if (give >= 2) {
     const idxs = hand.map((c, i) => ({ c, i })).sort((a, b) => (RARE.has(a.c) ? 1 : 0) - (RARE.has(b.c) ? 1 : 0)).slice(0, give).map((x) => x.i);
-    exchangeCards(state, playerIdx, { handIdxs: idxs, camels: 0 }, mkt.slice(0, give)); return;
+    return { kind: "exchange", handIdxs: idxs, camels: 0, marketIdxs: mkt.slice(0, give) };
   }
-  addLog(state, `${p.name} has no legal move — skips.`);
-  state.turnIndex = (playerIdx + 1) % PLAYER_COUNT; if (state.turnIndex === 0) state.round++;
+  return { kind: "skip" };
+}
+
+// The move a strong player would make for `seat` right now — pure, for the idle hint (NMK-61).
+export function suggestMove(state, seat) { return decideMove(state, seat); }
+
+export function applyMove(state, playerIdx, move) {
+  if (!move) return { ok: false, error: "No move." };
+  switch (move.kind) {
+    case "sell": return sellCards(state, playerIdx, move.good, move.count);
+    case "drones": return takeCamels(state, playerIdx);
+    case "take": return takeCard(state, playerIdx, move.idx);
+    case "exchange": return exchangeCards(state, playerIdx, { handIdxs: move.handIdxs, camels: move.camels }, move.marketIdxs);
+    case "skip": {
+      addLog(state, `${state.players[playerIdx].name} has no legal move — skips.`);
+      state.turnIndex = (playerIdx + 1) % PLAYER_COUNT; if (state.turnIndex === 0) state.round++;
+      return { ok: true, skipped: true };
+    }
+    default: return { ok: false, error: `Unknown move kind: ${move.kind}` };
+  }
+}
+
+export function botPlay(state, playerIdx) {
+  if (state.gameOver || state.turnIndex !== playerIdx) return;
+  applyMove(state, playerIdx, decideMove(state, playerIdx));
 }
