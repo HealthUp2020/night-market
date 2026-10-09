@@ -2,16 +2,18 @@
 // unit-testable. The DOM wiring (non-blocking overlay, highlight, first-run prompt) lives in
 // game.js. Loose gating: any valid player action advances one step.
 
+// Each non-final step names the action it teaches (`kind`), so the renderer can guarantee the live
+// board supports that action before prompting it and highlight the exact cards (NMK-66).
 export const COACH_STEPS = [
-  { target: ".market", title: "Take a card",
+  { kind: "take", target: ".market", title: "Take a card",
     body: "Click a good in the market, then press the action button to take it into your hand." },
-  { target: "#hand", title: "Sell for Gold",
+  { kind: "sell", target: "#hand", title: "Sell for Gold",
     body: "Select matching goods in your hand and sell them to bank Gold — selling 3+ earns a bonus token." },
-  { target: ".market", title: "Sweep the drones",
+  { kind: "drones", target: ".market", title: "Sweep the drones",
     body: "Take the drones from the market. They don't clog your hand, and the largest fleet earns the +5 Gold Fixer bonus." },
-  { target: ".market", title: "Exchange",
+  { kind: "exchange", target: ".market", title: "Exchange",
     body: "Pick 2+ market cards and pay the same number of drones from your fleet to grab them all in one move." },
-  { target: null, final: true, title: "You're set, Operator",
+  { kind: null, target: null, final: true, title: "You're set, Operator",
     body: "That's the game — bank the most Gold each round and seal two of three to win. The board's yours." },
 ];
 

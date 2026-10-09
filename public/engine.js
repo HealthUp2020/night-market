@@ -285,3 +285,91 @@ export function botPlay(state, playerIdx) {
   if (state.gameOver || state.turnIndex !== playerIdx) return;
   applyMove(state, playerIdx, decideMove(state, playerIdx));
 }
+
+// ---- Tutorial board guarantees (NMK-66) ----
+// The interactive tutorial (NMK-57) teaches take → sell → drones → exchange on a LIVE match, so a
+// step can prompt an action the current board can't support (e.g. "sweep the drones" with no drones
+// present). `canDo` tests whether an action kind is legal for a seat right now; `ensureTutorialAction`
+// minimally mutates the board so it becomes legal. Both are pure of the DOM. These are tutorial-only
+// helpers — they top up what a lesson needs; they do not script the match.
+
+// Is `kind` (take | sell | drones | exchange) a legal move for `seat` on the current board?
+export function canDo(state, seat, kind) {
+  const p = state.players[seat];
+  if (!p) return false;
+  switch (kind) {
+    case "drones": return state.market.some((c) => c === "camel");
+    case "take": return p.hand.length < HAND_LIMIT && state.market.some((c) => c !== "camel");
+    case "sell": {
+      const counts = goodsInHand(p.hand);
+      return GOODS.some((g) => {
+        const owned = counts[g] || 0, min = RARE.has(g) ? 2 : 1;
+        return owned >= min && (state.tokens[g]?.length || 0) > 0;
+      });
+    }
+    case "exchange": {
+      const goods = state.market.filter((c) => c !== "camel").length;
+      return goods >= 2 && p.camels >= 2 && p.hand.length + 2 <= HAND_LIMIT;
+    }
+    default: return false;
+  }
+}
+
+// A common good whose token pile still has value — the safest thing to teach selling with.
+function aSellableCommon(state) {
+  for (const g of GOODS) if (!RARE.has(g) && (state.tokens[g]?.length || 0) > 0) return g;
+  for (const g of GOODS) if ((state.tokens[g]?.length || 0) > 0) return g;
+  return GOODS.find((g) => !RARE.has(g)) || GOODS[0];
+}
+// Pull a non-drone card out of the deck (for topping up the market), or null if none left.
+function drawGoodsFromDeck(state) {
+  const i = state.deck.findIndex((c) => c !== "camel");
+  return i >= 0 ? state.deck.splice(i, 1)[0] : null;
+}
+// Replace a market goods card with a drone (the displaced card goes back onto the deck).
+function marketGoodsToDrone(state) {
+  const i = state.market.findIndex((c) => c !== "camel");
+  if (i < 0) return false;
+  state.deck.push(state.market[i]); state.market[i] = "camel"; return true;
+}
+
+// Minimally mutate the board so `canDo(state, seat, kind)` becomes true. No-op (returns false) when
+// the action is already possible. Returns true if it changed anything. Tutorial-only.
+export function ensureTutorialAction(state, seat, kind) {
+  if (canDo(state, seat, kind)) return false;
+  const p = state.players[seat];
+  let changed = false;
+  if (kind === "drones") {
+    // Guarantee at least two drones so the "fleet" lesson lands; replace goods slots with drones.
+    let have = state.market.filter((c) => c === "camel").length;
+    while (have < 2 && marketGoodsToDrone(state)) { have++; changed = true; }
+  } else if (kind === "take") {
+    if (p.hand.length >= HAND_LIMIT && p.hand.length > 0) { state.deck.push(p.hand.pop()); changed = true; } // make room
+    if (!state.market.some((c) => c !== "camel")) {
+      const j = state.market.findIndex((c) => c === "camel");
+      const g = drawGoodsFromDeck(state) || aSellableCommon(state);
+      if (j >= 0) { state.deck.push("camel"); state.market[j] = g; changed = true; }
+    }
+  } else if (kind === "sell") {
+    const g = aSellableCommon(state);
+    let have = p.hand.filter((c) => c === g).length, i = 0;
+    while (have < 2) {
+      if (i < p.hand.length) { if (p.hand[i] !== g) { p.hand[i] = g; have++; } i++; }
+      else if (p.hand.length < HAND_LIMIT) { p.hand.push(g); have++; }
+      else break;
+    }
+    changed = true;
+  } else if (kind === "exchange") {
+    // make room for the +2 cards an exchange brings in (return excess hand cards to the deck)
+    while (p.hand.length + 2 > HAND_LIMIT && p.hand.length > 0) { state.deck.push(p.hand.pop()); changed = true; }
+    let goods = state.market.filter((c) => c !== "camel").length;
+    while (goods < 2) {
+      const j = state.market.findIndex((c) => c === "camel");
+      if (j < 0) break;
+      const g = drawGoodsFromDeck(state) || aSellableCommon(state);
+      state.deck.push("camel"); state.market[j] = g; goods++; changed = true;
+    }
+    if (p.camels < 2) { p.camels = 2; changed = true; }
+  }
+  return changed;
+}
