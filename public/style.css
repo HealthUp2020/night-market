@@ -474,7 +474,10 @@ body{background:var(--bg-page)}
    the LAYOUT level so everything rasterizes at native device resolution — crisp on hi-DPI,
    unlike `transform: scale()` which bitmap-scales the whole subtree and blurs on retina.
    Because zoom changes the stage's used size, plain grid-centering places it correctly. */
-#stage-scaler{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden;background:var(--bg-page)}
+/* Pin the centering container to the VISIBLE viewport height (dvh), not the layout viewport, so the
+   stage — and its bottom action dock — stay on-screen under iOS Safari's address/tool bars. JS also
+   sets an explicit px height from visualViewport as a belt-and-braces. */
+#stage-scaler{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;display:grid;place-items:center;overflow:hidden;background:var(--bg-page)}
 #stage{flex-shrink:0}
 .card{cursor:pointer}
 .card .well svg{width:86%;height:80%}
@@ -853,3 +856,9 @@ body{background:var(--bg-page)}
 @media (prefers-reduced-motion: reduce){
   .card.move-hint{animation:none;box-shadow:0 0 20px 3px rgba(0,229,255,.5)} /* static glow, no motion */
 }
+
+/* ---- Landscape-safe full-screen overlays (NMK-67) ----
+   These overlays center their content but must stay reachable + scrollable on short landscape
+   viewports (e.g. phones in landscape), where fixed centering would clip the top/bottom. `safe`
+   centering falls back to start on overflow; `overflow:auto` lets the rest scroll into view. */
+#menu,#toosmall,#endscreen,#firstrun,#howto{overflow:auto;align-items:safe center}

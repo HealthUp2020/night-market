@@ -6,7 +6,7 @@ import {
   newGame, nextRound, takeCard, takeCamels, sellCards, exchangeCards, botPlay, suggestMove,
   ensureTutorialAction,
 } from "./engine.js";
-import { fitScale, isTooSmall } from "./layout.js";
+import { fitScale, screenMode } from "./layout.js";
 import { DIFFICULTY, DIFFICULTY_ORDER } from "./strategies.js";
 import { SAVE_KEY, parseSave } from "./persistence.js";
 import { AVATARS } from "./avatars.js";
@@ -618,14 +618,21 @@ function armIdleHint() {
 }
 
 // ---- Scale the fixed 1600x900 stage to fit the viewport (contain, never clipped) ----
-let _stageEl = null, _tooSmallEl = null;
+let _stageEl = null, _tooSmallEl = null, _scalerEl = null;
 // Prefer CSS `zoom` (layout-level scale → renders at native device resolution, crisp on hi-DPI).
 // Fall back to transform+translate on the rare engine without zoom support.
 const _zoomOK = typeof CSS !== "undefined" && CSS.supports && CSS.supports("zoom", "1");
 function fitStage() {
   _stageEl = _stageEl || document.getElementById("stage");
-  const vw = document.documentElement.clientWidth;
-  const vh = document.documentElement.clientHeight;
+  // Measure the VISUAL viewport (the actually-visible area) when available, so iOS Safari's
+  // address/tool bars don't leave the bottom dock scaled off-screen. Falls back to the layout
+  // viewport elsewhere.
+  const vv = window.visualViewport;
+  const vw = Math.round((vv && vv.width) || document.documentElement.clientWidth);
+  const vh = Math.round((vv && vv.height) || document.documentElement.clientHeight);
+  // Keep the centering container pinned to the visible height too (belt with the CSS dvh braces).
+  _scalerEl = _scalerEl || document.getElementById("stage-scaler");
+  if (_scalerEl) _scalerEl.style.height = vh + "px";
   const s = fitScale(vw, vh);
   if (_zoomOK) {
     _stageEl.style.zoom = s; // grid-centered by #stage-scaler; zoom changes used size so it fits
@@ -636,13 +643,14 @@ function fitStage() {
     _stageEl.style.top = "50%";
     _stageEl.style.transform = `translate(-50%, -50%) scale(${s})`;
   }
-  // Below the minimum viewport, show the "too small" fallback (ROC-202) over the stage.
+  // Landscape-only for now: portrait viewports get a "rotate your device" hint instead of the
+  // stage (a mobile/portrait layout is the Mobile epic). Landscape renders at any size.
   _tooSmallEl = _tooSmallEl || document.getElementById("toosmall");
   if (_tooSmallEl) {
-    const small = isTooSmall(vw, vh);
-    _tooSmallEl.classList.toggle("on", small);
-    _tooSmallEl.setAttribute("aria-hidden", small ? "false" : "true");
-    if (small) _tooSmallEl.querySelector(".ts-cur").textContent = `${vw} × ${vh}`;
+    const rotate = screenMode(vw, vh) === "rotate";
+    _tooSmallEl.classList.toggle("on", rotate);
+    _tooSmallEl.setAttribute("aria-hidden", rotate ? "false" : "true");
+    if (rotate) { const cur = _tooSmallEl.querySelector(".ts-cur"); if (cur) cur.textContent = `${vw} × ${vh}`; }
   }
 }
 // Coalesce bursts of layout events into a single re-fit on the next frame, and re-measure
